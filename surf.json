@@ -311,9 +311,10 @@
     "rule_set": [
       {
         "tag": "Ai",
-        "type": "local",
+        "type": "remote",
         "format": "binary",
-        "path": "../rulesets/ID_1m9j9uvh.srs"
+        "url":"https://mirror.ghproxy.com/https://raw.githubusercontent.com/DustinWin/ruleset_geodata/sing-box-ruleset/ai.srs",
+        "download_detour": "🎯 全球直连"
       },
       {
         "tag": "CATEGORY-ADS",

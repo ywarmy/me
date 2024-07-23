@@ -1,0 +1,998 @@
+{
+  "log": {
+    "disabled": false,
+    "level": "info",
+    "timestamp": true
+  },
+  "experimental": {
+    "cache_file": {
+      "enabled": true,
+      "path": "cache.db",
+      "cache_id": "my_profile2",
+      "store_fakeip": true
+    },
+    "clash_api": {
+      "external_ui": "ui",
+      "external_controller": "0.0.0.0:9090",
+      "external_ui_download_detour": "Proxy",
+      "default_mode": "rule"
+    }
+  },
+  "dns": {
+    "servers": [
+      {
+        "tag": "google",
+        "address": "tls://8.8.8.8",
+        "detour": "Proxy"
+      },
+      {
+        "tag": "fallback",
+        "address": "8.8.8.8",
+        "address_resolver": "google",
+        "detour": "Proxy"
+      },
+      {
+        "tag": "local-dns",
+        "address": "223.5.5.5",
+        "detour": "direct"
+      },
+      {
+        "tag": "block-dns",
+        "address": "rcode://success"
+      },
+      {
+        "tag": "Directdns",
+        "address": "8.8.8.8",
+        "detour": "Direct"
+      }
+    ],
+    "rules": [
+      {
+        "outbound": "any",
+        "server": "local-dns"
+      },
+      {
+        "rule_set": [
+          "Direct1"
+        ],
+        "server": "local-dns"
+      },
+      {
+        "query_type": [
+          "A"
+        ],
+        "rewrite_ttl": 1,
+        "server": "fallback"
+      }
+    ],
+    "strategy": "ipv4_only"
+  },
+  "inbounds": [
+    {
+      "type": "mixed",
+      "tag": "mixed-in",
+      "listen": "::",
+      "listen_port": 8888,
+      "sniff": true
+    },
+    {
+      "type": "tproxy",
+      "tag": "tproxy-in",
+      "listen": "::",
+      "listen_port": 9888,
+      "sniff_override_destination": true,
+      "sniff": true
+    },
+    {
+      "type": "direct",
+      "listen": "::",
+      "listen_port": 53,
+      "sniff": true,
+      "tag": "dns-in"
+    }
+  ],
+  "route": {
+    "rule_set": [
+      {
+        "type": "remote",
+        "format": "binary",
+        "download_detour": "Proxy",
+        "tag": "Direct0",
+        "url": "https://github.com/MetaCubeX/meta-rules-dat/raw/sing/geo/geoip/cn.srs"
+      },
+      {
+        "type": "remote",
+        "format": "binary",
+        "download_detour": "Proxy",
+        "tag": "Direct1",
+        "url": "https://github.com/MetaCubeX/meta-rules-dat/raw/sing/geo/geosite/cn.srs"
+      }
+    ],
+    "rules": [
+      {
+        "protocol": "dns",
+        "outbound": "dns-out"
+      },
+      {
+        "port": 53,
+        "outbound": "dns-out"
+      },
+      {
+        "type": "logical",
+        "mode": "or",
+        "rules": [
+          {
+            "port": 853
+          },
+          {
+            "network": "udp",
+            "port": 443
+          },
+          {
+            "protocol": "stun"
+          }
+        ],
+        "outbound": "block"
+      },
+      {
+        "rule_set": [
+          "Direct0",
+          "Direct1"
+        ],
+        "outbound": "direct"
+      },
+      {
+        "ip_is_private": true,
+        "outbound": "direct"
+      }
+    ],
+    "auto_detect_interface": true,
+    "final": "Proxy"
+  },
+  "outbounds": [
+    {
+      "tag": "Proxy",
+      "outbounds": [
+        "Surf"
+      ],
+      "interrupt_exist_connections": true,
+      "type": "selector"
+    },
+    {
+      "tag": "Surf",
+      "outbounds": [
+        "新加坡01|NF",
+        "新加坡02|NF",
+        "新加坡03|NF",
+        "新加坡04|NF",
+        "新加坡05|NF",
+        "新加坡06|NF",
+        "香港01|NF",
+        "香港02|NF",
+        "香港03|NF",
+        "香港04|NF",
+        "香港05|NF",
+        "香港06|NF"
+      ],
+      "type": "urltest",
+      "url": "https://www.gstatic.com/generate_204",
+      "tolerance": 50,
+      "interrupt_exist_connections": false
+    },
+    {
+      "type": "direct",
+      "tag": "➜ Direct"
+    },
+    {
+      "type": "direct",
+      "tag": "direct"
+    },
+    {
+      "type": "dns",
+      "tag": "dns-out"
+    },
+    {
+      "type": "block",
+      "tag": "block"
+    },
+    {
+      "tag": "剩余流量：341.6GB",
+      "server": "surfduck.co",
+      "server_port": 10086,
+      "type": "vmess",
+      "uuid": "fe71c816-a7ef-3238-8a87-384400055b7d",
+      "security": "auto",
+      "network": "tcp",
+      "transport": {
+        "headers": {
+          "Host": "surfduck.co"
+        },
+        "type": "ws",
+        "path": ""
+      },
+      "alter_id": 0
+    },
+    {
+      "tag": "过期时间：2024-10-01",
+      "server": "surfduck.co",
+      "server_port": 10086,
+      "type": "vmess",
+      "uuid": "fe71c816-a7ef-3238-8a87-384400055b7d",
+      "security": "auto",
+      "network": "tcp",
+      "transport": {
+        "headers": {
+          "Host": "surfduck.co"
+        },
+        "type": "ws",
+        "path": ""
+      },
+      "alter_id": 0
+    },
+    {
+      "tag": "【IPLC】广港|NF|倍率5x",
+      "server": "pro.innnnnni.pro",
+      "server_port": 50031,
+      "type": "vmess",
+      "uuid": "fe71c816-a7ef-3238-8a87-384400055b7d",
+      "security": "auto",
+      "network": "tcp",
+      "transport": {
+        "path": "/tls/usascp",
+        "headers": {
+          "Host": "iis7.club"
+        },
+        "type": "ws"
+      },
+      "alter_id": 0
+    },
+    {
+      "tag": "⭐ 官网site.surfduck.net",
+      "server": "pro.innnnnni.pro",
+      "server_port": 50624,
+      "type": "vmess",
+      "uuid": "fe71c816-a7ef-3238-8a87-384400055b7d",
+      "security": "auto",
+      "network": "tcp",
+      "transport": {
+        "path": "/tls/acl4age",
+        "headers": {
+          "Host": "catalogue.com"
+        },
+        "type": "ws"
+      },
+      "alter_id": 0
+    },
+    {
+      "tag": "乌克兰|NF",
+      "server": "pro.innnnnni.pro",
+      "server_port": 50038,
+      "type": "vmess",
+      "uuid": "fe71c816-a7ef-3238-8a87-384400055b7d",
+      "security": "auto",
+      "network": "tcp",
+      "transport": {
+        "path": "/tls/infffs",
+        "headers": {
+          "Host": "iebuu.com"
+        },
+        "type": "ws"
+      },
+      "alter_id": 0
+    },
+    {
+      "tag": "以色列|NF",
+      "server": "cf.surfduck.net",
+      "server_port": 80,
+      "type": "vmess",
+      "uuid": "fe71c816-a7ef-3238-8a87-384400055b7d",
+      "security": "auto",
+      "network": "tcp",
+      "transport": {
+        "path": "/",
+        "headers": {
+          "Host": "il.surfduck.net"
+        },
+        "type": "ws"
+      },
+      "alter_id": 0
+    },
+    {
+      "tag": "俄罗斯|NF",
+      "server": "pro.innnnnni.pro",
+      "server_port": 50036,
+      "type": "vmess",
+      "uuid": "fe71c816-a7ef-3238-8a87-384400055b7d",
+      "security": "auto",
+      "network": "tcp",
+      "transport": {
+        "path": "/tls/rmv",
+        "headers": {
+          "Host": "ruqd.xyz"
+        },
+        "type": "ws"
+      },
+      "alter_id": 0
+    },
+    {
+      "tag": "台湾01|NF|動畫瘋|倍率2.5x",
+      "server": "pro.innnnnni.pro",
+      "server_port": 50035,
+      "type": "vmess",
+      "uuid": "fe71c816-a7ef-3238-8a87-384400055b7d",
+      "security": "auto",
+      "network": "tcp",
+      "transport": {
+        "path": "/index",
+        "headers": {
+          "Host": "kvmiis.org"
+        },
+        "type": "ws"
+      },
+      "alter_id": 0
+    },
+    {
+      "tag": "台湾02|NF|動畫瘋|倍率2.5x",
+      "server": "pro.innnnnni.pro",
+      "server_port": 50116,
+      "type": "vmess",
+      "uuid": "fe71c816-a7ef-3238-8a87-384400055b7d",
+      "security": "auto",
+      "network": "tcp",
+      "transport": {
+        "path": "/tls/wnn.ins",
+        "headers": {
+          "Host": "instance.com"
+        },
+        "type": "ws"
+      },
+      "alter_id": 0
+    },
+    {
+      "tag": "台湾03|NF|動畫瘋|倍率2.5x",
+      "server": "pro.innnnnni.pro",
+      "server_port": 50361,
+      "type": "vmess",
+      "uuid": "fe71c816-a7ef-3238-8a87-384400055b7d",
+      "security": "auto",
+      "network": "tcp",
+      "transport": {
+        "path": "/tls/opwes.co",
+        "headers": {
+          "Host": "kvmiis.org"
+        },
+        "type": "ws"
+      },
+      "alter_id": 0
+    },
+    {
+      "tag": "土耳其01|NF",
+      "server": "pro.innnnnni.pro",
+      "server_port": 50037,
+      "type": "vmess",
+      "uuid": "fe71c816-a7ef-3238-8a87-384400055b7d",
+      "security": "auto",
+      "network": "tcp",
+      "transport": {
+        "path": "/tls/digital.com",
+        "headers": {
+          "Host": "www.mki.co.jp"
+        },
+        "type": "ws"
+      },
+      "alter_id": 0
+    },
+    {
+      "tag": "土耳其02|NF",
+      "server": "pro.innnnnni.pro",
+      "server_port": 50050,
+      "type": "vmess",
+      "uuid": "fe71c816-a7ef-3238-8a87-384400055b7d",
+      "security": "auto",
+      "network": "tcp",
+      "transport": {
+        "path": "/tls/6sense.com",
+        "headers": {
+          "Host": "hostinger.com"
+        },
+        "type": "ws"
+      },
+      "alter_id": 0
+    },
+    {
+      "tag": "德国|NF",
+      "server": "pro.innnnnni.pro",
+      "server_port": 50710,
+      "type": "vmess",
+      "uuid": "fe71c816-a7ef-3238-8a87-384400055b7d",
+      "security": "auto",
+      "network": "tcp",
+      "transport": {
+        "path": "/tls/despirit",
+        "headers": {
+          "Host": "dashboard.net"
+        },
+        "type": "ws"
+      },
+      "alter_id": 0
+    },
+    {
+      "tag": "新加坡01|NF",
+      "server": "pro.innnnnni.pro",
+      "server_port": 50073,
+      "type": "vmess",
+      "uuid": "fe71c816-a7ef-3238-8a87-384400055b7d",
+      "security": "auto",
+      "network": "tcp",
+      "transport": {
+        "path": "/index",
+        "headers": {
+          "Host": "freedom.surfduck.net"
+        },
+        "type": "ws"
+      },
+      "alter_id": 0
+    },
+    {
+      "tag": "新加坡02|NF",
+      "server": "pro.innnnnni.pro",
+      "server_port": 50471,
+      "type": "vmess",
+      "uuid": "fe71c816-a7ef-3238-8a87-384400055b7d",
+      "security": "auto",
+      "network": "tcp",
+      "transport": {
+        "path": "/tls/ikucc.org",
+        "headers": {
+          "Host": "wtich.co"
+        },
+        "type": "ws"
+      },
+      "alter_id": 0
+    },
+    {
+      "tag": "新加坡03|NF",
+      "server": "pro.innnnnni.pro",
+      "server_port": 50108,
+      "type": "vmess",
+      "uuid": "fe71c816-a7ef-3238-8a87-384400055b7d",
+      "security": "auto",
+      "network": "tcp",
+      "transport": {
+        "path": "/index",
+        "headers": {
+          "Host": "kvm.io"
+        },
+        "type": "ws"
+      },
+      "alter_id": 0
+    },
+    {
+      "tag": "新加坡04|NF",
+      "server": "pro.innnnnni.pro",
+      "server_port": 50290,
+      "type": "vmess",
+      "uuid": "fe71c816-a7ef-3238-8a87-384400055b7d",
+      "security": "auto",
+      "network": "tcp",
+      "transport": {
+        "path": "/tls/iis6.com",
+        "headers": {
+          "Host": "essaz.xyz"
+        },
+        "type": "ws"
+      },
+      "alter_id": 0
+    },
+    {
+      "tag": "新加坡05|NF",
+      "server": "pro.innnnnni.pro",
+      "server_port": 50362,
+      "type": "vmess",
+      "uuid": "fe71c816-a7ef-3238-8a87-384400055b7d",
+      "security": "auto",
+      "network": "tcp",
+      "transport": {
+        "path": "/tls/dcc.com",
+        "headers": {
+          "Host": "dcc.com"
+        },
+        "type": "ws"
+      },
+      "alter_id": 0
+    },
+    {
+      "tag": "新加坡06|NF",
+      "server": "pro.innnnnni.pro",
+      "server_port": 50365,
+      "type": "vmess",
+      "uuid": "fe71c816-a7ef-3238-8a87-384400055b7d",
+      "security": "auto",
+      "network": "tcp",
+      "transport": {
+        "path": "/tls/firelll",
+        "headers": {
+          "Host": "MiinnlDff.net"
+        },
+        "type": "ws"
+      },
+      "alter_id": 0
+    },
+    {
+      "tag": "新疆地区专用",
+      "server": "cf.surfduck.net",
+      "server_port": 80,
+      "type": "vmess",
+      "uuid": "fe71c816-a7ef-3238-8a87-384400055b7d",
+      "security": "auto",
+      "network": "tcp",
+      "transport": {
+        "path": "/",
+        "headers": {
+          "Host": "xj.surfduck.net"
+        },
+        "type": "ws"
+      },
+      "alter_id": 0
+    },
+    {
+      "tag": "日本01|NF",
+      "server": "pro.innnnnni.pro",
+      "server_port": 50336,
+      "type": "vmess",
+      "uuid": "fe71c816-a7ef-3238-8a87-384400055b7d",
+      "security": "auto",
+      "network": "tcp",
+      "transport": {
+        "path": "/tls/ins",
+        "headers": {
+          "Host": "jpmorn.com"
+        },
+        "type": "ws"
+      },
+      "alter_id": 0
+    },
+    {
+      "tag": "日本02|NF",
+      "server": "pro.innnnnni.pro",
+      "server_port": 50337,
+      "type": "vmess",
+      "uuid": "fe71c816-a7ef-3238-8a87-384400055b7d",
+      "security": "auto",
+      "network": "tcp",
+      "transport": {
+        "path": "/tls/moonwsspcoasud",
+        "headers": {
+          "Host": "wxcseccto.ace"
+        },
+        "type": "ws"
+      },
+      "alter_id": 0
+    },
+    {
+      "tag": "日本03|NF",
+      "server": "pro.innnnnni.pro",
+      "server_port": 50338,
+      "type": "vmess",
+      "uuid": "fe71c816-a7ef-3238-8a87-384400055b7d",
+      "security": "auto",
+      "network": "tcp",
+      "transport": {
+        "path": "/tls/doopknfgunc",
+        "headers": {
+          "Host": "appoins.art"
+        },
+        "type": "ws"
+      },
+      "alter_id": 0
+    },
+    {
+      "tag": "日本04|NF",
+      "server": "pro.innnnnni.pro",
+      "server_port": 50088,
+      "type": "vmess",
+      "uuid": "fe71c816-a7ef-3238-8a87-384400055b7d",
+      "security": "auto",
+      "network": "tcp",
+      "transport": {
+        "path": "/tls/vimui",
+        "headers": {
+          "Host": "edgr.net"
+        },
+        "type": "ws"
+      },
+      "alter_id": 0
+    },
+    {
+      "tag": "日本05|NF",
+      "server": "pro.innnnnni.pro",
+      "server_port": 50089,
+      "type": "vmess",
+      "uuid": "fe71c816-a7ef-3238-8a87-384400055b7d",
+      "security": "auto",
+      "network": "tcp",
+      "transport": {
+        "path": "/tls/ccok8",
+        "headers": {
+          "Host": "strama.io"
+        },
+        "type": "ws"
+      },
+      "alter_id": 0
+    },
+    {
+      "tag": "柬埔寨|NF",
+      "server": "pro.innnnnni.pro",
+      "server_port": 50222,
+      "type": "vmess",
+      "uuid": "fe71c816-a7ef-3238-8a87-384400055b7d",
+      "security": "auto",
+      "network": "tcp",
+      "transport": {
+        "path": "/tls/cadia",
+        "headers": {
+          "Host": "voanews.com"
+        },
+        "type": "ws"
+      },
+      "alter_id": 0
+    },
+    {
+      "tag": "泰国|NF",
+      "server": "pro.innnnnni.pro",
+      "server_port": 50741,
+      "type": "vmess",
+      "uuid": "fe71c816-a7ef-3238-8a87-384400055b7d",
+      "security": "auto",
+      "network": "tcp",
+      "transport": {
+        "path": "/tls/inyoku",
+        "headers": {
+          "Host": "media.com"
+        },
+        "type": "ws"
+      },
+      "alter_id": 0
+    },
+    {
+      "tag": "美国01|NF",
+      "server": "pro.innnnnni.pro",
+      "server_port": 50441,
+      "type": "vmess",
+      "uuid": "fe71c816-a7ef-3238-8a87-384400055b7d",
+      "security": "auto",
+      "network": "tcp",
+      "transport": {
+        "path": "/tls/cctv5wz",
+        "headers": {
+          "Host": "zurxqqvs.com"
+        },
+        "type": "ws"
+      },
+      "alter_id": 0
+    },
+    {
+      "tag": "美国02|NF",
+      "server": "pro.innnnnni.pro",
+      "server_port": 50442,
+      "type": "vmess",
+      "uuid": "fe71c816-a7ef-3238-8a87-384400055b7d",
+      "security": "auto",
+      "network": "tcp",
+      "transport": {
+        "path": "/tls/wxikoo",
+        "headers": {
+          "Host": "moonsun.com"
+        },
+        "type": "ws"
+      },
+      "alter_id": 0
+    },
+    {
+      "tag": "美国03|NF",
+      "server": "pro.innnnnni.pro",
+      "server_port": 50443,
+      "type": "vmess",
+      "uuid": "fe71c816-a7ef-3238-8a87-384400055b7d",
+      "security": "auto",
+      "network": "tcp",
+      "transport": {
+        "path": "/tls/ibv6wqoov",
+        "headers": {
+          "Host": "tandie.ie"
+        },
+        "type": "ws"
+      },
+      "alter_id": 0
+    },
+    {
+      "tag": "美国04|NF",
+      "server": "pro.innnnnni.pro",
+      "server_port": 50111,
+      "type": "vmess",
+      "uuid": "fe71c816-a7ef-3238-8a87-384400055b7d",
+      "security": "auto",
+      "network": "tcp",
+      "transport": {
+        "path": "/tls/outmxjzll",
+        "headers": {
+          "Host": "killrusfg.org"
+        },
+        "type": "ws"
+      },
+      "alter_id": 0
+    },
+    {
+      "tag": "美国05|NF",
+      "server": "pro.innnnnni.pro",
+      "server_port": 50112,
+      "type": "vmess",
+      "uuid": "fe71c816-a7ef-3238-8a87-384400055b7d",
+      "security": "auto",
+      "network": "tcp",
+      "transport": {
+        "path": "/tls/insbotx",
+        "headers": {
+          "Host": "opexesa.ace"
+        },
+        "type": "ws"
+      },
+      "alter_id": 0
+    },
+    {
+      "tag": "美国06|NF",
+      "server": "pro.innnnnni.pro",
+      "server_port": 50114,
+      "type": "vmess",
+      "uuid": "fe71c816-a7ef-3238-8a87-384400055b7d",
+      "security": "auto",
+      "network": "tcp",
+      "transport": {
+        "path": "/tls/nivodcdn",
+        "headers": {
+          "Host": "usytocc.com"
+        },
+        "type": "ws"
+      },
+      "alter_id": 0
+    },
+    {
+      "tag": "美国07|NF",
+      "server": "pro.innnnnni.pro",
+      "server_port": 50115,
+      "type": "vmess",
+      "uuid": "fe71c816-a7ef-3238-8a87-384400055b7d",
+      "security": "auto",
+      "network": "tcp",
+      "transport": {
+        "path": "/tls/noidtv",
+        "headers": {
+          "Host": "qvps.org"
+        },
+        "type": "ws"
+      },
+      "alter_id": 0
+    },
+    {
+      "tag": "美国08|NF",
+      "server": "pro.innnnnni.pro",
+      "server_port": 50118,
+      "type": "vmess",
+      "uuid": "fe71c816-a7ef-3238-8a87-384400055b7d",
+      "security": "auto",
+      "network": "tcp",
+      "transport": {
+        "path": "/tls/nanfoi",
+        "headers": {
+          "Host": "oracle.net"
+        },
+        "type": "ws"
+      },
+      "alter_id": 0
+    },
+    {
+      "tag": "美国09|NF",
+      "server": "pro.innnnnni.pro",
+      "server_port": 50119,
+      "type": "vmess",
+      "uuid": "fe71c816-a7ef-3238-8a87-384400055b7d",
+      "security": "auto",
+      "network": "tcp",
+      "transport": {
+        "path": "/tls/myvbsf",
+        "headers": {
+          "Host": "netcup.de"
+        },
+        "type": "ws"
+      },
+      "alter_id": 0
+    },
+    {
+      "tag": "英国|NF",
+      "server": "pro.innnnnni.pro",
+      "server_port": 50110,
+      "type": "vmess",
+      "uuid": "fe71c816-a7ef-3238-8a87-384400055b7d",
+      "security": "auto",
+      "network": "tcp",
+      "transport": {
+        "path": "/tls/ourtimes",
+        "headers": {
+          "Host": "xcuns.ace"
+        },
+        "type": "ws"
+      },
+      "alter_id": 0
+    },
+    {
+      "tag": "荷兰|NF",
+      "server": "cf.surfduck.net",
+      "server_port": 80,
+      "type": "vmess",
+      "uuid": "fe71c816-a7ef-3238-8a87-384400055b7d",
+      "security": "auto",
+      "network": "tcp",
+      "transport": {
+        "path": "/",
+        "headers": {
+          "Host": "nl.surfduck.net"
+        },
+        "type": "ws"
+      },
+      "alter_id": 0
+    },
+    {
+      "tag": "阿联酋|NF",
+      "server": "cf.surfduck.net",
+      "server_port": 80,
+      "type": "vmess",
+      "uuid": "fe71c816-a7ef-3238-8a87-384400055b7d",
+      "security": "auto",
+      "network": "tcp",
+      "transport": {
+        "path": "/",
+        "headers": {
+          "Host": "ae.surfduck.net"
+        },
+        "type": "ws"
+      },
+      "alter_id": 0
+    },
+    {
+      "tag": "韩国|家宽|倍率3x",
+      "server": "pro.innnnnni.pro",
+      "server_port": 50742,
+      "type": "vmess",
+      "uuid": "fe71c816-a7ef-3238-8a87-384400055b7d",
+      "security": "auto",
+      "network": "tcp",
+      "transport": {
+        "path": "/pmlund",
+        "headers": {
+          "Host": "hostphb.com"
+        },
+        "type": "ws"
+      },
+      "alter_id": 0
+    },
+    {
+      "tag": "香港01|NF",
+      "server": "pro.innnnnni.pro",
+      "server_port": 50145,
+      "type": "vmess",
+      "uuid": "fe71c816-a7ef-3238-8a87-384400055b7d",
+      "security": "auto",
+      "network": "tcp",
+      "transport": {
+        "path": "/index",
+        "headers": {
+          "Host": "cctv5.com"
+        },
+        "type": "ws"
+      },
+      "alter_id": 0
+    },
+    {
+      "tag": "香港02|NF",
+      "server": "pro.innnnnni.pro",
+      "server_port": 50244,
+      "type": "vmess",
+      "uuid": "fe71c816-a7ef-3238-8a87-384400055b7d",
+      "security": "auto",
+      "network": "tcp",
+      "transport": {
+        "path": "/lkkp",
+        "headers": {
+          "Host": "bom.com"
+        },
+        "type": "ws"
+      },
+      "alter_id": 0
+    },
+    {
+      "tag": "香港03|NF",
+      "server": "pro.innnnnni.pro",
+      "server_port": 50451,
+      "type": "vmess",
+      "uuid": "fe71c816-a7ef-3238-8a87-384400055b7d",
+      "security": "auto",
+      "network": "tcp",
+      "transport": {
+        "path": "/dex",
+        "headers": {
+          "Host": "cctv6.com"
+        },
+        "type": "ws"
+      },
+      "alter_id": 0
+    },
+    {
+      "tag": "香港04|NF",
+      "server": "pro.innnnnni.pro",
+      "server_port": 50389,
+      "type": "vmess",
+      "uuid": "fe71c816-a7ef-3238-8a87-384400055b7d",
+      "security": "auto",
+      "network": "tcp",
+      "transport": {
+        "path": "/tls/mbrscp",
+        "headers": {
+          "Host": "rock.club"
+        },
+        "type": "ws"
+      },
+      "alter_id": 0
+    },
+    {
+      "tag": "香港05|NF",
+      "server": "pro.innnnnni.pro",
+      "server_port": 50555,
+      "type": "vmess",
+      "uuid": "fe71c816-a7ef-3238-8a87-384400055b7d",
+      "security": "auto",
+      "network": "tcp",
+      "transport": {
+        "path": "/tls/ytimr.com",
+        "headers": {
+          "Host": "tawk.to"
+        },
+        "type": "ws"
+      },
+      "alter_id": 0
+    },
+    {
+      "tag": "香港06|NF",
+      "server": "pro.innnnnni.pro",
+      "server_port": 50628,
+      "type": "vmess",
+      "uuid": "fe71c816-a7ef-3238-8a87-384400055b7d",
+      "security": "auto",
+      "network": "tcp",
+      "transport": {
+        "path": "/tls/yooimt",
+        "headers": {
+          "Host": "who.com"
+        },
+        "type": "ws"
+      },
+      "alter_id": 0
+    },
+    {
+      "tag": "马来西亚|NF",
+      "server": "pro.innnnnni.pro",
+      "server_port": 50055,
+      "type": "vmess",
+      "uuid": "fe71c816-a7ef-3238-8a87-384400055b7d",
+      "security": "auto",
+      "network": "tcp",
+      "transport": {
+        "path": "/tls/ulahost",
+        "headers": {
+          "Host": "catime.ace"
+        },
+        "type": "ws"
+      },
+      "alter_id": 0
+    }
+  ]
+}

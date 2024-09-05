@@ -1,0 +1,753 @@
+{
+  "log": {
+    "disabled": false,
+    "level": "info",
+    "timestamp": true
+  },
+  "experimental": {
+    "cache_file": {
+      "enabled": true,
+      "path": "cache.db",
+      "cache_id": "my_profile2",
+      "store_fakeip": true
+    },
+    "clash_api": {
+      "external_ui": "ui",
+      "external_controller": "0.0.0.0:9090",
+      "external_ui_download_detour": "Proxy",
+      "default_mode": "rule"
+    }
+  },
+  "dns": {
+    "servers": [
+      {
+        "tag": "google",
+        "address": "tls://8.8.8.8",
+        "detour": "Proxy"
+      },
+      {
+        "tag": "fallback",
+        "address": "8.8.8.8",
+        "address_resolver": "google",
+        "detour": "Proxy"
+      },
+      {
+        "tag": "local-dns",
+        "address": "223.5.5.5",
+        "detour": "direct"
+      },
+      {
+        "tag": "fakeip-dns",
+        "address": "fakeip"
+      },
+      {
+        "tag": "block-dns",
+        "address": "rcode://success"
+      }
+    ],
+    "rules": [
+      {
+        "outbound": "any",
+        "server": "local-dns"
+      },
+      {
+        "rule_set": [
+          "GeoAI0",
+          "GeoAI1"
+        ],
+        "server": "fakeip-dns"
+      },
+      {
+        "rule_set": [
+          "Direct1",
+          "Direct2"
+        ],
+        "server": "local-dns"
+      },
+      {
+        "query_type": [
+          "A"
+        ],
+        "rewrite_ttl": 1,
+        "server": "fakeip-dns"
+      }
+    ],
+    "strategy": "ipv4_only",
+    "fakeip": {
+      "enabled": true,
+      "inet4_range": "198.18.0.0/15"
+    }
+  },
+  "inbounds": [
+    {
+      "type": "mixed",
+      "tag": "mixed-in",
+      "listen": "::",
+      "listen_port": 8888,
+      "sniff": true
+    },
+    {
+      "type": "tun",
+      "inet4_address": "172.19.0.1/30",
+      "stack": "system",
+      "sniff": true,
+      "auto_route": true,
+      "strict_route": true,
+      "gso": false,
+      "platform": {
+        "http_proxy": {
+          "enabled": true,
+          "server": "127.0.0.1",
+          "server_port": 8888
+        }
+      }
+    }
+  ],
+  "route": {
+    "rule_set": [
+      {
+        "type": "remote",
+        "format": "binary",
+        "download_detour": "direct",
+        "tag": "GeoAI0",
+        "url": "https://mirror.ghproxy.com/https://github.com/MetaCubeX/meta-rules-dat/raw/sing/geo/geosite/openai.srs"
+      },
+      {
+        "type": "remote",
+        "format": "binary",
+        "download_detour": "direct",
+        "tag": "GeoAI1",
+        "url": "https://mirror.ghproxy.com/https://github.com/MetaCubeX/meta-rules-dat/raw/sing/geo/geosite/google-gemini.srs"
+      },
+      {
+        "type": "remote",
+        "format": "binary",
+        "download_detour": "direct",
+        "tag": "Direct0",
+        "url": "https://mirror.ghproxy.com/https://github.com/MetaCubeX/meta-rules-dat/raw/sing/geo/geoip/cn.srs"
+      },
+      {
+        "type": "remote",
+        "format": "binary",
+        "download_detour": "direct",
+        "tag": "Direct1",
+        "url": "https://mirror.ghproxy.com/https://github.com/MetaCubeX/meta-rules-dat/raw/sing/geo/geosite/cn.srs"
+      },
+      {
+        "type": "remote",
+        "format": "binary",
+        "download_detour": "direct",
+        "tag": "Direct2",
+        "url": "https://mirror.ghproxy.com/https://github.com/MetaCubeX/meta-rules-dat/raw/sing/geo/geosite/apple@cn.srs"
+      }
+    ],
+    "rules": [
+      {
+        "protocol": "dns",
+        "outbound": "dns-out"
+      },
+      {
+        "port": 53,
+        "outbound": "dns-out"
+      },
+      {
+        "type": "logical",
+        "mode": "or",
+        "rules": [
+          {
+            "port": 853
+          },
+          {
+            "network": "udp",
+            "port": 443
+          },
+          {
+            "protocol": "stun"
+          }
+        ],
+        "outbound": "block"
+      },
+      {
+        "rule_set": [
+          "GeoAI0",
+          "GeoAI1"
+        ],
+        "outbound": "GeoAI"
+      },
+      {
+        "rule_set": [
+          "Direct0",
+          "Direct1",
+          "Direct2"
+        ],
+        "outbound": "direct"
+      },
+      {
+        "ip_is_private": true,
+        "outbound": "direct"
+      }
+    ],
+    "auto_detect_interface": true,
+    "final": "Proxy"
+  },
+  "outbounds": [
+    {
+      "tag": "Proxy",
+      "outbounds": [
+        "✈️Glados",
+        "🚛 AI"
+      ],
+      "interrupt_exist_connections": true,
+      "type": "selector"
+    },
+    {
+      "tag": "GeoAI",
+      "outbounds": [
+        "Proxy",
+        "✈️Glados",
+        "🚛 AI"
+      ],
+      "interrupt_exist_connections": true,
+      "type": "selector"
+    },
+    {
+      "tag": "✈️Glados",
+      "outbounds": [
+        "GLaDOS-JP-B1-01",
+        "GLaDOS-JP-B1-02",
+        "GLaDOS-JP-B1-03",
+        "GLaDOS-JP-B1-04",
+        "GLaDOS-JP-B1-05",
+        "GLaDOS-JP-B1-06",
+        "GLaDOS-JP-N2-01",
+        "GLaDOS-JP-N2-02",
+        "GLaDOS-JP-N2-03",
+        "GLaDOS-JP-N2-04",
+        "GLaDOS-JP-N2-05",
+        "GLaDOS-TW-01",
+        "GLaDOS-TW-02",
+        "GLaDOS-TW-03",
+        "GLaDOS-JP-01",
+        "GLaDOS-JP-02",
+        "GLaDOS-JP-03",
+        "GLaDOS-HK-01",
+        "GLaDOS-HK-02",
+        "GLaDOS-HK-03",
+        "GLaDOS-SG-01",
+        "GLaDOS-SG-02",
+        "GLaDOS-SG-03"
+      ],
+      "type": "urltest",
+      "url": "https://www.gstatic.com/generate_204",
+      "tolerance": 50,
+      "interrupt_exist_connections": false
+    },
+    {
+      "tag": "🚛 AI",
+      "outbounds": [
+        "GLaDOS-JP-B1-01",
+        "GLaDOS-JP-B1-02",
+        "GLaDOS-JP-B1-03",
+        "GLaDOS-JP-B1-04",
+        "GLaDOS-JP-B1-05",
+        "GLaDOS-JP-B1-06",
+        "GLaDOS-JP-N2-01",
+        "GLaDOS-JP-N2-02",
+        "GLaDOS-JP-N2-03",
+        "GLaDOS-JP-N2-04",
+        "GLaDOS-JP-N2-05",
+        "GLaDOS-JP-01",
+        "GLaDOS-JP-02",
+        "GLaDOS-JP-03",
+        "GLaDOS-SG-01",
+        "GLaDOS-SG-02",
+        "GLaDOS-SG-03"
+      ],
+      "type": "urltest",
+      "url": "https://www.gstatic.com/generate_204",
+      "tolerance": 50,
+      "interrupt_exist_connections": false
+    },
+    {
+      "type": "direct",
+      "tag": "➜ Direct"
+    },
+    {
+      "type": "direct",
+      "tag": "direct"
+    },
+    {
+      "type": "dns",
+      "tag": "dns-out"
+    },
+    {
+      "type": "block",
+      "tag": "block"
+    },
+    {
+      "tag": "GLaDOS-JP-B1-01",
+      "server": "a8da2bd.m1.gladns.com",
+      "server_port": 2377,
+      "type": "shadowsocks",
+      "method": "chacha20-ietf-poly1305",
+      "password": "t0srmdxrm3xyjnvqz9ewlxb2myq7rjuv",
+      "plugin": "obfs-local",
+      "plugin_opts": "obfs=tls;obfs-host=a8da2bd.dl.microsoft.ch:181782"
+    },
+    {
+      "tag": "GLaDOS-JP-B1-02",
+      "server": "a8da2bd.m2.gladns.com",
+      "server_port": 2377,
+      "type": "shadowsocks",
+      "method": "chacha20-ietf-poly1305",
+      "password": "t0srmdxrm3xyjnvqz9ewlxb2myq7rjuv",
+      "plugin": "obfs-local",
+      "plugin_opts": "obfs=tls;obfs-host=a8da2bd.dl.microsoft.lt:181782"
+    },
+    {
+      "tag": "GLaDOS-JP-B1-03",
+      "server": "a8da2bd.m3.gladns.com",
+      "server_port": 2377,
+      "type": "shadowsocks",
+      "method": "chacha20-ietf-poly1305",
+      "password": "t0srmdxrm3xyjnvqz9ewlxb2myq7rjuv",
+      "plugin": "obfs-local",
+      "plugin_opts": "obfs=tls;obfs-host=a8da2bd.dl.microsoft.md:181782"
+    },
+    {
+      "tag": "GLaDOS-JP-B1-04",
+      "server": "a8da2bd.m4.gladns.com",
+      "server_port": 2377,
+      "type": "shadowsocks",
+      "method": "chacha20-ietf-poly1305",
+      "password": "t0srmdxrm3xyjnvqz9ewlxb2myq7rjuv",
+      "plugin": "obfs-local",
+      "plugin_opts": "obfs=tls;obfs-host=a8da2bd.dl.epicgames.com:181782"
+    },
+    {
+      "tag": "GLaDOS-JP-B1-05",
+      "server": "a8da2bd.m5.gladns.com",
+      "server_port": 2377,
+      "type": "shadowsocks",
+      "method": "chacha20-ietf-poly1305",
+      "password": "t0srmdxrm3xyjnvqz9ewlxb2myq7rjuv",
+      "plugin": "obfs-local",
+      "plugin_opts": "obfs=tls;obfs-host=a8da2bd.dl.microsoft.net:181782"
+    },
+    {
+      "tag": "GLaDOS-JP-B1-06",
+      "server": "a8da2bd.m6.gladns.com",
+      "server_port": 2377,
+      "type": "shadowsocks",
+      "method": "chacha20-ietf-poly1305",
+      "password": "t0srmdxrm3xyjnvqz9ewlxb2myq7rjuv",
+      "plugin": "obfs-local",
+      "plugin_opts": "obfs=tls;obfs-host=a8da2bd.dl.microsoft.hu:181782"
+    },
+    {
+      "tag": "GLaDOS-JP-N2-01",
+      "server": "a8da2bd.pa.gladns.com",
+      "server_port": 3074,
+      "type": "hysteria2",
+      "password": "NDg1NzQ4OjE4MTc4MjoyM2ZhNDJiYmJkZDIzMTgw",
+      "tls": {
+        "enabled": true,
+        "insecure": true,
+        "server_name": "a8da2bd.pa.gladns.com"
+      },
+      "tcp_fast_open": false
+    },
+    {
+      "tag": "GLaDOS-JP-N2-02",
+      "server": "a8da2bd.pb.gladns.com",
+      "server_port": 3074,
+      "type": "hysteria2",
+      "password": "NDg1NzQ4OjE4MTc4MjoyM2ZhNDJiYmJkZDIzMTgw",
+      "tls": {
+        "enabled": true,
+        "insecure": true,
+        "server_name": "a8da2bd.pb.gladns.com"
+      },
+      "tcp_fast_open": false
+    },
+    {
+      "tag": "GLaDOS-JP-N2-03",
+      "server": "a8da2bd.pc.gladns.com",
+      "server_port": 3074,
+      "type": "hysteria2",
+      "password": "NDg1NzQ4OjE4MTc4MjoyM2ZhNDJiYmJkZDIzMTgw",
+      "tls": {
+        "enabled": true,
+        "insecure": true,
+        "server_name": "a8da2bd.pc.gladns.com"
+      },
+      "tcp_fast_open": false
+    },
+    {
+      "tag": "GLaDOS-JP-N2-04",
+      "server": "a8da2bd.pd.gladns.com",
+      "server_port": 3074,
+      "type": "hysteria2",
+      "password": "NDg1NzQ4OjE4MTc4MjoyM2ZhNDJiYmJkZDIzMTgw",
+      "tls": {
+        "enabled": true,
+        "insecure": true,
+        "server_name": "a8da2bd.pd.gladns.com"
+      },
+      "tcp_fast_open": false
+    },
+    {
+      "tag": "GLaDOS-JP-N2-05",
+      "server": "a8da2bd.pe.gladns.com",
+      "server_port": 3074,
+      "type": "hysteria2",
+      "password": "NDg1NzQ4OjE4MTc4MjoyM2ZhNDJiYmJkZDIzMTgw",
+      "tls": {
+        "enabled": true,
+        "insecure": true,
+        "server_name": "a8da2bd.pe.gladns.com"
+      },
+      "tcp_fast_open": false
+    },
+    {
+      "tag": "GLaDOS-US-01",
+      "server": "a8da2bd.u1.glados-config.net",
+      "server_port": 2377,
+      "type": "shadowsocks",
+      "method": "chacha20-ietf-poly1305",
+      "password": "t0srmdxrm3xyjnvqz9ewlxb2myq7rjuv",
+      "plugin": "obfs-local",
+      "plugin_opts": "obfs=tls;obfs-host=a8da2bd.dl.microsoft.md:181782"
+    },
+    {
+      "tag": "GLaDOS-US-02",
+      "server": "a8da2bd.u2.glados-config.net",
+      "server_port": 2377,
+      "type": "shadowsocks",
+      "method": "chacha20-ietf-poly1305",
+      "password": "t0srmdxrm3xyjnvqz9ewlxb2myq7rjuv",
+      "plugin": "obfs-local",
+      "plugin_opts": "obfs=tls;obfs-host=a8da2bd.dl.microsoft.lt:181782"
+    },
+    {
+      "tag": "GLaDOS-US-03",
+      "server": "a8da2bd.u3.glados-config.net",
+      "server_port": 2377,
+      "type": "shadowsocks",
+      "method": "chacha20-ietf-poly1305",
+      "password": "t0srmdxrm3xyjnvqz9ewlxb2myq7rjuv",
+      "plugin": "obfs-local",
+      "plugin_opts": "obfs=tls;obfs-host=a8da2bd.dl.microsoft.de:181782"
+    },
+    {
+      "tag": "GLaDOS-TW-01",
+      "server": "a8da2bd.t1.glados-config.net",
+      "server_port": 2377,
+      "type": "shadowsocks",
+      "method": "chacha20-ietf-poly1305",
+      "password": "t0srmdxrm3xyjnvqz9ewlxb2myq7rjuv",
+      "plugin": "obfs-local",
+      "plugin_opts": "obfs=tls;obfs-host=a8da2bd.dl.xboxlive.com:181782"
+    },
+    {
+      "tag": "GLaDOS-TW-02",
+      "server": "a8da2bd.t2.glados-config.net",
+      "server_port": 2377,
+      "type": "shadowsocks",
+      "method": "chacha20-ietf-poly1305",
+      "password": "t0srmdxrm3xyjnvqz9ewlxb2myq7rjuv",
+      "plugin": "obfs-local",
+      "plugin_opts": "obfs=tls;obfs-host=a8da2bd.dl.microsoft.ge:181782"
+    },
+    {
+      "tag": "GLaDOS-TW-03",
+      "server": "a8da2bd.t3.glados-config.net",
+      "server_port": 2377,
+      "type": "shadowsocks",
+      "method": "chacha20-ietf-poly1305",
+      "password": "t0srmdxrm3xyjnvqz9ewlxb2myq7rjuv",
+      "plugin": "obfs-local",
+      "plugin_opts": "obfs=tls;obfs-host=a8da2bd.dl.microsoft.fi:181782"
+    },
+    {
+      "tag": "GLaDOS-JP-01",
+      "server": "a8da2bd.j1.glados-config.net",
+      "server_port": 2377,
+      "type": "shadowsocks",
+      "method": "chacha20-ietf-poly1305",
+      "password": "t0srmdxrm3xyjnvqz9ewlxb2myq7rjuv",
+      "plugin": "obfs-local",
+      "plugin_opts": "obfs=tls;obfs-host=a8da2bd.dl.mozilla.net:181782"
+    },
+    {
+      "tag": "GLaDOS-JP-02",
+      "server": "a8da2bd.j2.glados-config.net",
+      "server_port": 2377,
+      "type": "shadowsocks",
+      "method": "chacha20-ietf-poly1305",
+      "password": "t0srmdxrm3xyjnvqz9ewlxb2myq7rjuv",
+      "plugin": "obfs-local",
+      "plugin_opts": "obfs=tls;obfs-host=a8da2bd.dl.microsoft.com:181782"
+    },
+    {
+      "tag": "GLaDOS-JP-03",
+      "server": "a8da2bd.j3.glados-config.net",
+      "server_port": 2377,
+      "type": "shadowsocks",
+      "method": "chacha20-ietf-poly1305",
+      "password": "t0srmdxrm3xyjnvqz9ewlxb2myq7rjuv",
+      "plugin": "obfs-local",
+      "plugin_opts": "obfs=tls;obfs-host=a8da2bd.dl.fastly.net:181782"
+    },
+    {
+      "tag": "GLaDOS-HK-01",
+      "server": "a8da2bd.h1.glados-config.net",
+      "server_port": 2377,
+      "type": "shadowsocks",
+      "method": "chacha20-ietf-poly1305",
+      "password": "t0srmdxrm3xyjnvqz9ewlxb2myq7rjuv",
+      "plugin": "obfs-local",
+      "plugin_opts": "obfs=tls;obfs-host=a8da2bd.dl.microsoft.cat:181782"
+    },
+    {
+      "tag": "GLaDOS-HK-02",
+      "server": "a8da2bd.h2.glados-config.net",
+      "server_port": 2377,
+      "type": "shadowsocks",
+      "method": "chacha20-ietf-poly1305",
+      "password": "t0srmdxrm3xyjnvqz9ewlxb2myq7rjuv",
+      "plugin": "obfs-local",
+      "plugin_opts": "obfs=tls;obfs-host=a8da2bd.dl.mozilla.net:181782"
+    },
+    {
+      "tag": "GLaDOS-HK-03",
+      "server": "a8da2bd.h3.glados-config.net",
+      "server_port": 2377,
+      "type": "shadowsocks",
+      "method": "chacha20-ietf-poly1305",
+      "password": "t0srmdxrm3xyjnvqz9ewlxb2myq7rjuv",
+      "plugin": "obfs-local",
+      "plugin_opts": "obfs=tls;obfs-host=a8da2bd.dl.nintendo.it:181782"
+    },
+    {
+      "tag": "GLaDOS-SG-01",
+      "server": "a8da2bd.s1.glados-config.net",
+      "server_port": 2377,
+      "type": "shadowsocks",
+      "method": "chacha20-ietf-poly1305",
+      "password": "t0srmdxrm3xyjnvqz9ewlxb2myq7rjuv",
+      "plugin": "obfs-local",
+      "plugin_opts": "obfs=tls;obfs-host=a8da2bd.dl.microsoft.lv:181782"
+    },
+    {
+      "tag": "GLaDOS-SG-02",
+      "server": "a8da2bd.s2.glados-config.net",
+      "server_port": 2377,
+      "type": "shadowsocks",
+      "method": "chacha20-ietf-poly1305",
+      "password": "t0srmdxrm3xyjnvqz9ewlxb2myq7rjuv",
+      "plugin": "obfs-local",
+      "plugin_opts": "obfs=tls;obfs-host=a8da2bd.dl.microsoft.lu:181782"
+    },
+    {
+      "tag": "GLaDOS-SG-03",
+      "server": "a8da2bd.s3.glados-config.net",
+      "server_port": 2377,
+      "type": "shadowsocks",
+      "method": "chacha20-ietf-poly1305",
+      "password": "t0srmdxrm3xyjnvqz9ewlxb2myq7rjuv",
+      "plugin": "obfs-local",
+      "plugin_opts": "obfs=tls;obfs-host=a8da2bd.dl.microsoft.cat:181782"
+    },
+    {
+      "tag": "GLaDOS-UK-01",
+      "server": "a8da2bd.e1.glados-config.net",
+      "server_port": 2377,
+      "type": "shadowsocks",
+      "method": "chacha20-ietf-poly1305",
+      "password": "t0srmdxrm3xyjnvqz9ewlxb2myq7rjuv",
+      "plugin": "obfs-local",
+      "plugin_opts": "obfs=tls;obfs-host=a8da2bd.dl.nintendo.be:181782"
+    },
+    {
+      "tag": "GLaDOS-UK-02",
+      "server": "a8da2bd.e2.glados-config.net",
+      "server_port": 2377,
+      "type": "shadowsocks",
+      "method": "chacha20-ietf-poly1305",
+      "password": "t0srmdxrm3xyjnvqz9ewlxb2myq7rjuv",
+      "plugin": "obfs-local",
+      "plugin_opts": "obfs=tls;obfs-host=a8da2bd.dl.microsoft.es:181782"
+    },
+    {
+      "tag": "GLaDOS-UK-03",
+      "server": "a8da2bd.e3.glados-config.net",
+      "server_port": 2377,
+      "type": "shadowsocks",
+      "method": "chacha20-ietf-poly1305",
+      "password": "t0srmdxrm3xyjnvqz9ewlxb2myq7rjuv",
+      "plugin": "obfs-local",
+      "plugin_opts": "obfs=tls;obfs-host=a8da2bd.dl.microsoft.cz:181782"
+    },
+    {
+      "tag": "GLaDOS-TW-Netflix",
+      "server": "a8da2bd.d1.glados-config.net",
+      "server_port": 2377,
+      "type": "shadowsocks",
+      "method": "chacha20-ietf-poly1305",
+      "password": "t0srmdxrm3xyjnvqz9ewlxb2myq7rjuv",
+      "plugin": "obfs-local",
+      "plugin_opts": "obfs=tls;obfs-host=a8da2bd.dl.microsoft.cl:181782"
+    },
+    {
+      "tag": "GLaDOS-TW-Netflix - 2",
+      "server": "a8da2bd.d2.glados-config.net",
+      "server_port": 2377,
+      "type": "shadowsocks",
+      "method": "chacha20-ietf-poly1305",
+      "password": "t0srmdxrm3xyjnvqz9ewlxb2myq7rjuv",
+      "plugin": "obfs-local",
+      "plugin_opts": "obfs=tls;obfs-host=a8da2bd.dl.microsoft.lt:181782"
+    },
+    {
+      "tag": "GLaDOS-US-Netflix",
+      "server": "a8da2bd.d4.glados-config.net",
+      "server_port": 2377,
+      "type": "shadowsocks",
+      "method": "chacha20-ietf-poly1305",
+      "password": "t0srmdxrm3xyjnvqz9ewlxb2myq7rjuv",
+      "plugin": "obfs-local",
+      "plugin_opts": "obfs=tls;obfs-host=a8da2bd.dl.fastly.net:181782"
+    },
+    {
+      "tag": "GLaDOS-US-Netflix - 2",
+      "server": "a8da2bd.d5.glados-config.net",
+      "server_port": 2377,
+      "type": "shadowsocks",
+      "method": "chacha20-ietf-poly1305",
+      "password": "t0srmdxrm3xyjnvqz9ewlxb2myq7rjuv",
+      "plugin": "obfs-local",
+      "plugin_opts": "obfs=tls;obfs-host=a8da2bd.dl.microsoft.is:181782"
+    },
+    {
+      "tag": "GLaDOS-D1-01",
+      "server": "a8da2bd.da.glados-config.net",
+      "server_port": 2377,
+      "type": "shadowsocks",
+      "method": "chacha20-ietf-poly1305",
+      "password": "t0srmdxrm3xyjnvqz9ewlxb2myq7rjuv",
+      "plugin": "obfs-local",
+      "plugin_opts": "obfs=tls;obfs-host=a8da2bd.dl.nintendo.net:181782"
+    },
+    {
+      "tag": "GLaDOS-D1-02",
+      "server": "a8da2bd.db.glados-config.net",
+      "server_port": 2377,
+      "type": "shadowsocks",
+      "method": "chacha20-ietf-poly1305",
+      "password": "t0srmdxrm3xyjnvqz9ewlxb2myq7rjuv",
+      "plugin": "obfs-local",
+      "plugin_opts": "obfs=tls;obfs-host=a8da2bd.dl.microsoft.net:181782"
+    },
+    {
+      "tag": "GLaDOS-D1-03",
+      "server": "a8da2bd.dc.glados-config.net",
+      "server_port": 2377,
+      "type": "shadowsocks",
+      "method": "chacha20-ietf-poly1305",
+      "password": "t0srmdxrm3xyjnvqz9ewlxb2myq7rjuv",
+      "plugin": "obfs-local",
+      "plugin_opts": "obfs=tls;obfs-host=a8da2bd.dl.microsoft.cat:181782"
+    },
+    {
+      "tag": "F1-US-OpenAI",
+      "server": "a8da2bd.qa.glados-config.com",
+      "server_port": 8880,
+      "type": "shadowsocks",
+      "method": "chacha20-ietf-poly1305",
+      "password": "t0srmdxrm3xyjnvqz9ewlxb2myq7rjuv",
+      "plugin": "",
+      "plugin_opts": ""
+    },
+    {
+      "tag": "F1-US-Netflix",
+      "server": "a8da2bd.qc.glados-config.com",
+      "server_port": 8880,
+      "type": "shadowsocks",
+      "method": "chacha20-ietf-poly1305",
+      "password": "t0srmdxrm3xyjnvqz9ewlxb2myq7rjuv",
+      "plugin": "",
+      "plugin_opts": ""
+    },
+    {
+      "tag": "F1-US-Youtube-Premium",
+      "server": "a8da2bd.qb.glados-config.com",
+      "server_port": 8880,
+      "type": "shadowsocks",
+      "method": "chacha20-ietf-poly1305",
+      "password": "t0srmdxrm3xyjnvqz9ewlxb2myq7rjuv",
+      "plugin": "",
+      "plugin_opts": ""
+    },
+    {
+      "tag": "F1-TW",
+      "server": "a8da2bd.qc.glados-config.com",
+      "server_port": 8880,
+      "type": "shadowsocks",
+      "method": "chacha20-ietf-poly1305",
+      "password": "t0srmdxrm3xyjnvqz9ewlxb2myq7rjuv",
+      "plugin": "",
+      "plugin_opts": ""
+    },
+    {
+      "tag": "F1-TW-OpenAI",
+      "server": "a8da2bd.qc.glados-config.com",
+      "server_port": 8880,
+      "type": "shadowsocks",
+      "method": "chacha20-ietf-poly1305",
+      "password": "t0srmdxrm3xyjnvqz9ewlxb2myq7rjuv",
+      "plugin": "",
+      "plugin_opts": ""
+    },
+    {
+      "tag": "F1-TW-Netflix",
+      "server": "a8da2bd.qe.glados-config.com",
+      "server_port": 8880,
+      "type": "shadowsocks",
+      "method": "chacha20-ietf-poly1305",
+      "password": "t0srmdxrm3xyjnvqz9ewlxb2myq7rjuv",
+      "plugin": "",
+      "plugin_opts": ""
+    },
+    {
+      "tag": "F1-TW-Youtube-Premium",
+      "server": "a8da2bd.qc.glados-config.com",
+      "server_port": 8880,
+      "type": "shadowsocks",
+      "method": "chacha20-ietf-poly1305",
+      "password": "t0srmdxrm3xyjnvqz9ewlxb2myq7rjuv",
+      "plugin": "",
+      "plugin_opts": ""
+    },
+    {
+      "tag": "F1-JP-Youtube-Premium",
+      "server": "a8da2bd.qd.glados-config.com",
+      "server_port": 8880,
+      "type": "shadowsocks",
+      "method": "chacha20-ietf-poly1305",
+      "password": "t0srmdxrm3xyjnvqz9ewlxb2myq7rjuv",
+      "plugin": "",
+      "plugin_opts": ""
+    },
+    {
+      "tag": "F1-SG-Youtube-Premium",
+      "server": "a8da2bd.qf.glados-config.com",
+      "server_port": 8880,
+      "type": "shadowsocks",
+      "method": "chacha20-ietf-poly1305",
+      "password": "t0srmdxrm3xyjnvqz9ewlxb2myq7rjuv",
+      "plugin": "",
+      "plugin_opts": ""
+    }
+  ]
+}

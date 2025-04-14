@@ -2,7 +2,7 @@
 # 机场订阅
 proxy-providers:
   Airport1:
-    url: "https://api.fileta.one/link/0wgTqGKNOoWSJcaE?sub=3"
+    url: "你的订阅链接"
     type: http
     interval: 864000
     health-check:

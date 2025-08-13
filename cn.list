@@ -1,3 +1,9 @@
+DOMAIN-SUFFIX,apple.cn
+DOMAIN-SUFFIX,ls.apple.com
+DOMAIN-SUFFIX,push.apple.com
+DOMAIN-SUFFIX,bpapi.apple.com
+DOMAIN-SUFFIX,itunes.com
+DOMAIN-SUFFIX,api.touker.com
+DOMAIN-SUFFIX,gab.122.gov.cn
 DOMAIN-SUFFIX,icloud.com
-DOMAIN-SUFFIX,apple.com
 GEOIP,cn

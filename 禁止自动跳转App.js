@@ -34,3 +34,25 @@
     const observer = new MutationObserver(removeBanners);
     observer.observe(document.documentElement, { childList: true, subtree: true });
 })();
+// 尝试通过拦截 window.location 的原型链来阻止跳转
+const originalAssign = window.location.assign;
+window.location.assign = function(url) {
+    if (url.startsWith('http')) {
+        originalAssign.call(window.location, url);
+    } else {
+        console.log('拦截到非 http 跳转:', url);
+    }
+};
+
+// 阻止动态创建 iframe（很多广告和跳转的常用手段）
+const observer = new MutationObserver((mutations) => {
+    mutations.forEach((mutation) => {
+        mutation.addedNodes.forEach((node) => {
+            if (node.tagName === 'IFRAME' && node.src && !node.src.startsWith('http')) {
+                node.remove();
+                console.log('已拦截非法跳转 iframe');
+            }
+        });
+    });
+});
+observer.observe(document.documentElement, { childList: true, subtree: true });

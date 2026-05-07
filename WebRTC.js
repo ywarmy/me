@@ -1,48 +1,132 @@
 // ==UserScript==
-// @name         屏蔽 WebRTC 泄露
+// @name         Safari WebRTC Blocker
 // @namespace    http://tampermonkey.net/
-// @version      1.1
-// @description  尝试通过 Hook 禁用浏览器 WebRTC 接口，防止 IP 泄露
-// @author       Gemini
+// @version      3.0
+// @description  Safari 专用 WebRTC 防泄露
 // @match        *://*/*
 // @grant        none
 // @run-at       document-start
 // ==/UserScript==
 
-(function() {
+(function () {
     'use strict';
 
-    // 定义要禁用的核心 WebRTC 构造函数和 API
-    const webrtcKeys = [
-        'RTCPeerConnection',
-        'webkitRTCPeerConnection',
-        'mozRTCPeerConnection',
-        'RTCDataChannel',
-        'RTCIceCandidate'
-    ];
+    const NativeRTC =
+        window.RTCPeerConnection ||
+        window.webkitRTCPeerConnection;
 
-    webrtcKeys.forEach(key => {
-        if (window[key]) {
-            // 将这些接口重定向或置空
-            Object.defineProperty(window, key, {
-                value: function() {
-                    console.warn(`[WebRTC Blocker] 已拦截对 ${key} 的尝试访问。`);
-                    throw new Error(`${key} is disabled by script.`);
-                },
-                enumerable: false,
-                configurable: false,
-                writable: false
-            });
-        }
+    if (!NativeRTC) return;
+
+    function FakeRTC(config) {
+
+        const pc = new NativeRTC({
+            iceServers: []
+        });
+
+        // 阻止 candidate 泄露
+        Object.defineProperty(pc, 'onicecandidate', {
+            set() {},
+            get() {
+                return null;
+            }
+        });
+
+        // 阻止 SDP 生成
+        pc.createOffer = async function () {
+            throw new DOMException(
+                'WebRTC disabled',
+                'NotAllowedError'
+            );
+        };
+
+        pc.createAnswer = async function () {
+            throw new DOMException(
+                'WebRTC disabled',
+                'NotAllowedError'
+            );
+        };
+
+        // 阻止 candidate 添加
+        pc.addIceCandidate = async function () {
+            return;
+        };
+
+        // 阻止本地描述
+        pc.setLocalDescription = async function () {
+            return;
+        };
+
+        // 清空 sender
+        pc.getSenders = function () {
+            return [];
+        };
+
+        // 清空 receiver
+        pc.getReceivers = function () {
+            return [];
+        };
+
+        // 清空 transceiver
+        pc.getTransceivers = function () {
+            return [];
+        };
+
+        // 直接关闭
+        setTimeout(() => {
+            try {
+                pc.close();
+            } catch (e) {}
+        }, 50);
+
+        return pc;
+    }
+
+    // 保持 prototype
+    FakeRTC.prototype = NativeRTC.prototype;
+
+    // 替换
+    Object.defineProperty(window, 'RTCPeerConnection', {
+        get() {
+            return FakeRTC;
+        },
+        set() {},
+        configurable: false
     });
 
-    // 禁用媒体设备获取（可选，增强隐私）
-    if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
-        const originalEnumerate = navigator.mediaDevices.enumerateDevices;
-        navigator.mediaDevices.enumerateDevices = function() {
-            console.warn('[WebRTC Blocker] 已拦截媒体设备枚举。');
-            return Promise.reject(new Error("Permission denied"));
-        };
+    Object.defineProperty(window, 'webkitRTCPeerConnection', {
+        get() {
+            return FakeRTC;
+        },
+        set() {},
+        configurable: false
+    });
+
+    // 阻止媒体访问
+    if (navigator.mediaDevices) {
+
+        navigator.mediaDevices.getUserMedia =
+            async function () {
+                throw new DOMException(
+                    'Permission denied',
+                    'NotAllowedError'
+                );
+            };
+
+        navigator.mediaDevices.enumerateDevices =
+            async function () {
+                return [];
+            };
+    }
+
+    // 阻止 ICE candidate
+    if (window.RTCIceCandidate) {
+
+        window.RTCIceCandidate =
+            function () {
+                throw new Error(
+                    'ICE disabled'
+                );
+            };
     }
 
 })();

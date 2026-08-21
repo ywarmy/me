@@ -1,6 +1,15 @@
 # me
-replace_ip.sh更改目标文件中的IP，系统先安装GNU awk。 apt install gawk.
-
-upmihomo.sh 自动判断openwrt的CPU 架构，下载最新的Release版本，替换原先nikki中的alpha版本。
-
-installmihomo.sh 在armbian系统中，自动判断CPU 架构，下载最新的Release版本,并配置透明代理。把config.yaml（文件中自行放入订阅链接）放入root目录下，自动完成安装运行。
+1. Mihomo 核心
+安装 Mihomo
+配置文件：/etc/mihomo/config.yaml
+程序：/usr/local/bin/mihomo
+systemd 服务：mihomo.service
+开机自动启动
+使用 systemd 管理 Mihomo
+2. 代理端口
+当前设计：
+功能	端口	用途
+混合代理	7890	给需要手动设置代理的客户端使用
+TProxy	7893	透明代理核心端口
+控制面板	9090	Mihomo 控制接口
+DNS	53	Mihomo DNS

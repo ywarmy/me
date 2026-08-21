@@ -1,26 +1,20 @@
-# 注意规则在满足自己需求情况下，尽量做到精简，不要过度复杂，以免影响性能。
-# 机场订阅
 proxy-providers:
   Airport1:
-    url: "你的订阅链接"
+    url: "*"
     type: http
     interval: 864000
     health-check:
       enable: true
       url: https://www.gstatic.com/generate_204
       interval: 300
-    proxy: 🚀 默认代理
-
+    proxy: 🎯direct
 # 节点信息
 proxies:
-  - {name: 🎯 直连, type: direct, udp: true}
+  - {name: 🎯direct, type: direct, udp: true}
 
 # 全局配置 
-port: 7890
-socks-port: 7891
-redir-port: 7892
-mixed-port: 7893
-tproxy-port: 7894
+mixed-port: 7890
+tproxy-port: 7893
 allow-lan: true
 bind-address: "*"
 ipv6: false
@@ -29,7 +23,6 @@ tcp-concurrent: true
 log-level: warning
 find-process-mode: 'off'
 # interface-name: en0
-global-client-fingerprint: chrome
 keep-alive-idle: 600
 keep-alive-interval: 15
 disable-keep-alive: false
@@ -40,7 +33,7 @@ profile:
 # 控制面板
 external-controller: 0.0.0.0:9090
 secret: ""
-external-ui: "/etc/mihomo/run/ui"
+external-ui: "/etc/mihomo/ui"
 external-ui-name: zashboard
 external-ui-url: "https://github.com/Zephyruso/zashboard/archive/refs/heads/gh-pages.zip"
 
@@ -55,8 +48,6 @@ sniffer:
       ports: [443, 8443]
     QUIC:
       ports: [443, 8443]
-  force-domain:
-    - "+.v2ex.com"
   skip-domain:
     - "rule-set:private_domain,cn_domain"
     - "dlg.io.mi.com"
@@ -73,16 +64,6 @@ sniffer:
     - "+.msftncsi.com"
 
 
-# 入站  
-tun:
-  enable: true
-  # system/gvisor/mixed
-  stack: mixed
-  dns-hijack: ["any:53", "tcp://any:53"]
-  auto-route: true
-  auto-redirect: true
-  auto-detect-interface: true
-
 hosts:
   doh.pub: [1.12.12.12, 120.53.53.53]
   dns.alidns.com: [223.5.5.5, 223.6.6.6]
@@ -91,7 +72,7 @@ hosts:
 # DNS模块
 dns:
   enable: true
-  listen: 0.0.0.0:1053
+  listen: 0.0.0.0:53
   ipv6: false
   respect-rules: true
   enhanced-mode: fake-ip
@@ -108,8 +89,8 @@ dns:
     - "+.ntp.ntsc.ac.cn"
     - "+.cn.ntp.org.cn"
   nameserver:
-    - https://dns.google/dns-query
     - https://cloudflare-dns.com/dns-query
+    - https://dns.google/dns-query
   proxy-server-nameserver:
     - https://doh.pub/dns-query
     - https://dns.alidns.com/dns-query
@@ -118,24 +99,25 @@ dns:
     - https://dns.alidns.com/dns-query
 # 出站策略
 # 注意锚点必须放在引用的上方，可以集中把锚点全部放yaml的顶部。
-pr: &pr {type: select, proxies: [🚀 默认代理]}
+pr: &pr {type: select, proxies: [🚀Proxy]}
 proxy-groups:
-  - {name: 🚀 默认代理, type: select, proxies: [♻️ 代理节点,  🌐 全部节点]}
-  - {name: ♻️ 代理节点, type: url-test, include-all: true, tolerance: 20, interval: 300, filter: "(?=.*(新加坡|港|日))^((?!(台|韩|美)).)*$"}
-  - {name: 🌐 全部节点, type: select, include-all: true}
-  - {name: 🐟 漏网之鱼, <<: *pr}
+  - {name: 🚀Proxy, type: select, proxies: [♻️代理节点,  🌐全部节点]}
+  - {name: ♻️代理节点, type: url-test, include-all: true, tolerance: 20, interval: 300, filter: "^(?=.*(B1|B2|SG|JP|TW)).*$"}
+  - {name: 🌐全部节点, type: select, include-all: true}
 
 # 规则匹配
 # 此规则部分没有做防泄露处理，因为弊严重大于利！
 rules:
-  - RULE-SET,custom_keyword,🚀 默认代理
-  - RULE-SET,proxylite,🚀 默认代理
-  - RULE-SET,gfw_domain,🚀 默认代理
-  - RULE-SET,geolocation-!cn,🚀 默认代理
-  - RULE-SET,private_domain,🎯 直连
-  - RULE-SET,cn_domain,🎯 直连
-  - RULE-SET,cn_ip,🎯 直连
-  - MATCH,🐟 漏网之鱼
+# - AND,((NETWORK,UDP),(DST-PORT,443)),REJECT-DROP
+  - RULE-SET,apple_domain,🎯direct
+  - RULE-SET,gfw_domain,🚀Proxy
+  - RULE-SET,telegram_domain,🚀Proxy
+  - RULE-SET,geolocation-!cn,🚀Proxy
+  - RULE-SET,telegram_ip,🚀Proxy,no-resolve
+  - RULE-SET,private_domain,🎯direct
+  - RULE-SET,cn_domain,🎯direct
+  - RULE-SET,cn_ip,🎯direct
+  - MATCH,🚀Proxy
 
 # 规则集
 rule-anchor:
@@ -144,10 +126,11 @@ rule-anchor:
   class: &class {type: http, interval: 86400, behavior: classical, format: text}
   keyword: &keyword {type: http, interval: 86400, behavior: classical, format: text}
 rule-providers: 
-  custom_keyword: {<<: *keyword, url: "https://raw.githubusercontent.com/ywarmy/me/main/domain-keyword.list"}
+  apple_domain: {<<: *class, url: "https://raw.githubusercontent.com/ywarmy/me/refs/heads/main/cn.list"}
+  telegram_domain: { <<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/telegram.mrs"}
   private_domain: { <<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/private.mrs"}
-  proxylite: { <<: *class, url: "https://raw.githubusercontent.com/qichiyuhub/rule/refs/heads/master/ProxyLite.list"}
   gfw_domain: { <<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/gfw.mrs"}
   geolocation-!cn: { <<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/geolocation-!cn.mrs"}
   cn_domain: { <<: *domain, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/cn.mrs"}
+  telegram_ip: { <<: *ip, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geoip/telegram.mrs"}
   cn_ip: { <<: *ip, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geoip/cn.mrs"}

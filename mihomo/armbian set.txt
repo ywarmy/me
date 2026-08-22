@@ -1,0 +1,57 @@
+cat > /etc/systemd/network/10-ens32.network <<'EOF'
+[Match]
+Name=ens32
+
+[Network]
+DHCP=no
+Address=192.168.11.11/24
+Gateway=192.168.11.1
+DNS=192.168.11.1
+IPv6AcceptRA=no
+LinkLocalAddressing=no
+EOF
+
+systemctl restart systemd-networkd
+
+
+ip addr show ens32
+ip route
+resolvectl status
+
+
+GW=192.168.11.2
+
+ip route replace default via "$GW" dev ens32 metric 10
+
+systemctl stop systemd-resolved 2>/dev/null || true
+rm -f /etc/resolv.conf
+
+cat > /etc/resolv.conf <<EOF
+nameserver $GW
+EOF
+
+echo "=== 当前网关 ==="
+ip route | grep default
+
+echo "=== 当前 DNS ==="
+cat /etc/resolv.conf
+
+
+本机 DNS 应该直接交给 Mihomo 的 53 端口，而不是绕过 Mihomo
+rm -f /etc/resolv.conf
+
+cat > /etc/resolv.conf <<'EOF'
+nameserver 127.0.0.1
+EOF
+
+
+
+恢复
+ip route del default via 192.168.11.2 dev ens32
+
+去除127.0.0.1代理
+unset http_proxy https_proxy all_proxy HTTP_PROXY HTTPS_PROXY ALL_PROXY
+
+sed -i '/^export http_proxy=http:\/\/127\.0\.0\.1:7890$/d' /root/.bashrc
+sed -i '/^export https_proxy=http:\/\/127\.0\.0\.1:7890$/d' /root/.bashrc
+sed -i '/^export all_proxy=socks5:\/\/127\.0\.0\.1:7890$/d' /root/.bashrc

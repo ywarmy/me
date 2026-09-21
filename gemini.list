@@ -1,4 +1,4 @@
-# === 1. 账号鉴权与凭证刷新 (拦截 Location 校验的核心) ===
+# === 1. 账号鉴权与凭证刷新 ===
 DOMAIN,accounts.google.com
 DOMAIN,oauth2.googleapis.com
 DOMAIN-SUFFIX,clients6.google.com
@@ -16,18 +16,20 @@ DOMAIN-SUFFIX,generativelanguage.googleapis.com
 DOMAIN-SUFFIX,proactivebackend-pa.googleapis.com
 DOMAIN-SUFFIX,aiplatform.googleapis.com
 
-# === 3. Cloud Code / 内部推断接口 (日志报错链路) ===
+# === 3. Cloud Code / Antigravity 内部推断接口 ===
+# 日志实测当前唯一上游: daily-cloudcode-pa.googleapis.com
 DOMAIN,cloudcode-pa.googleapis.com
 DOMAIN,daily-cloudcode-pa.googleapis.com
 DOMAIN,daily-cloudcode-pa.sandbox.googleapis.com
 DOMAIN,autopush-cloudcode-pa.sandbox.googleapis.com
 DOMAIN,staging-cloudcode-pa.sandbox.googleapis.com
+DOMAIN,aicode-pa.googleapis.com          # ← 补充: 灰度备用端点
 
 # === 4. Google 基础依赖与长连接通道 ===
 DOMAIN-SUFFIX,apis.google.com
 DOMAIN,client-channel.google.com
 
-# === 5. 关键兜底匹配 ===
+# === 5. 关键词兜底 (覆盖未来新灰度子域名) ===
+DOMAIN-KEYWORD,googleapis               # ← 补充: 兜底所有 *.googleapis.com
 DOMAIN-KEYWORD,gemini
 DOMAIN-KEYWORD,developerprofiles
-DOMAIN-SUFFIX,googleapis.com

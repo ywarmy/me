@@ -11,3 +11,6 @@ DOMAIN-SUFFIX,proactivebackend-pa.googleapis.com
 DOMAIN-SUFFIX,apis.google.com
 DOMAIN-KEYWORD,gemini
 DOMAIN-KEYWORD,developerprofiles
+DOMAIN,cloudcode-pa.googleapis.com
+DOMAIN,daily-cloudcode-pa.googleapis.com
+DOMAIN,daily-cloudcode-pa.sandbox.googleapis.com

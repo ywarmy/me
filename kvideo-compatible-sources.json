@@ -1,0 +1,122 @@
+[
+  {
+    "id": "tv_back_023_csp_snzy",
+    "name": "索尼高清ok线路1",
+    "baseUrl": "https://suoniapi.com/api.php/provide/vod",
+    "group": "normal",
+    "enabled": true,
+    "priority": 1
+  },
+  {
+    "id": "tv_back_023_csp",
+    "name": "小胡资源ok线路1",
+    "baseUrl": "http://c.小胡.icu/api.php/provide/vod",
+    "group": "normal",
+    "enabled": true,
+    "priority": 2
+  },
+  {
+    "id": "tv_back_023_csp_2",
+    "name": "非凡资源ok线路1",
+    "baseUrl": "http://ffzy1.tv/api.php/provide/vod",
+    "group": "normal",
+    "enabled": true,
+    "priority": 3
+  },
+  {
+    "id": "tv_back_023",
+    "name": "量子资源ok线路1",
+    "baseUrl": "https://lzizy1.com/api.php/provide/vod",
+    "group": "normal",
+    "enabled": true,
+    "priority": 4
+  },
+  {
+    "id": "tv_back_023_49zy",
+    "name": "四九资源ok线路1",
+    "baseUrl": "https://49zy1.com/api.php/provide/vod",
+    "group": "normal",
+    "enabled": true,
+    "priority": 5
+  },
+  {
+    "id": "tv_back_023_2",
+    "name": "奇虎采集ok线路1",
+    "baseUrl": "https://caiji.qhzyapi.com/api.php/provide/vod",
+    "group": "normal",
+    "enabled": true,
+    "priority": 6
+  },
+  {
+    "id": "tv_back_023_3",
+    "name": "可可采集ok线路1",
+    "baseUrl": "https://kekezy1.com/api.php/provide/vod",
+    "group": "normal",
+    "enabled": true,
+    "priority": 7
+  },
+  {
+    "id": "tv_back_023_4",
+    "name": "虎牙采集ok线路1",
+    "baseUrl": "https://www.huyaapi.com/api.php/provide/vod/from/hym3u8",
+    "group": "normal",
+    "enabled": true,
+    "priority": 8
+  },
+  {
+    "id": "tv_back_012_feifan",
+    "name": "非凡资源二月红接口",
+    "baseUrl": "http://ffzy5.tv/api.php/provide/vod",
+    "group": "normal",
+    "enabled": true,
+    "priority": 9
+  },
+  {
+    "id": "tv_back_012_ruyi",
+    "name": "如意资源二月红接口",
+    "baseUrl": "https://cj.rycjapi.com/api.php/provide/vod",
+    "group": "normal",
+    "enabled": true,
+    "priority": 10
+  },
+  {
+    "id": "tv_back_023_feisu",
+    "name": "飞速采集ok线路1",
+    "baseUrl": "https://www.feisuzyapi.com/api.php/provide/vod",
+    "group": "normal",
+    "enabled": true,
+    "priority": 11
+  },
+  {
+    "id": "tv_back_023_5",
+    "name": "火狐采集ok线路1",
+    "baseUrl": "https://hhzyapi.com/api.php/provide/vod",
+    "group": "normal",
+    "enabled": true,
+    "priority": 12
+  },
+  {
+    "id": "tv_back_023_6",
+    "name": "百度采集ok线路1",
+    "baseUrl": "https://api.apibdzy.com/api.php/provide/vod",
+    "group": "normal",
+    "enabled": true,
+    "priority": 13
+  },
+  {
+    "id": "tv_back_024",
+    "name": "暴風采集荐片",
+    "baseUrl": "https://bfzyapi.com/api.php/provide/vod",
+    "group": "normal",
+    "enabled": true,
+    "priority": 14
+  },
+  {
+    "id": "tv_back_024_360",
+    "name": "360采集荐片",
+    "baseUrl": "https://360zy.com/api.php/provide/vod",
+    "group": "normal",
+    "enabled": true,
+    "priority": 15
+  }
+]

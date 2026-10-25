@@ -132,7 +132,7 @@
     "name": "优酷资源",
     "baseUrl": "https://api.ukuapi.com/api.php/provide/vod",
     "group": "normal",
-    "enabled": false,
+    "enabled": true,
     "priority": 17
   },
   {
@@ -756,7 +756,7 @@
     "name": "🔞-大奶子-",
     "baseUrl": "https://apidanaizi.com/api.php/provide/vod",
     "group": "auto",
-    "enabled": false,
+    "enabled": true,
     "priority": 95
   },
   {
@@ -820,7 +820,7 @@
     "name": "🔞桃花资源",
     "baseUrl": "https://thzy1.me/api.php/provide/vod",
     "group": "auto",
-    "enabled": false,
+    "enabled": true,
     "priority": 103
   },
   {

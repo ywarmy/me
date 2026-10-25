@@ -76,7 +76,7 @@
     "name": "如意资源二月红接口",
     "baseUrl": "https://cj.rycjapi.com/api.php/provide/vod",
     "group": "normal",
-    "enabled": true,
+    "enabled": false,
     "priority": 10
   },
   {
@@ -190,5 +190,13 @@
     "group": "auto",
     "enabled": true,
     "priority": 24
+  },
+  {
+    "id": "auto_sdzyapi.com",
+    "name": "闪电资源",
+    "baseUrl": "http://sdzyapi.com/api.php/provide/vod",
+    "group": "auto",
+    "enabled": true,
+    "priority": 25
   }
 ]

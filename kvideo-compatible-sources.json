@@ -132,7 +132,7 @@
     "name": "优酷资源",
     "baseUrl": "https://api.ukuapi.com/api.php/provide/vod",
     "group": "normal",
-    "enabled": true,
+    "enabled": false,
     "priority": 17
   },
   {
@@ -724,7 +724,7 @@
     "name": "🔞滴滴资源",
     "baseUrl": "https://api.ddapi.cc/api.php/provide/vod",
     "group": "auto",
-    "enabled": false,
+    "enabled": true,
     "priority": 91
   },
   {
@@ -732,7 +732,7 @@
     "name": "🔞豆豆资源",
     "baseUrl": "https://api.douapi.cc/api.php/provide/vod",
     "group": "auto",
-    "enabled": false,
+    "enabled": true,
     "priority": 92
   },
   {
@@ -748,7 +748,7 @@
     "name": "🔞souavZY",
     "baseUrl": "https://api.souavzyw.net/api.php/provide/vod",
     "group": "auto",
-    "enabled": false,
+    "enabled": true,
     "priority": 94
   },
   {
@@ -764,7 +764,7 @@
     "name": "🔞辣椒资源",
     "baseUrl": "https://apilj.com/api.php/provide/vod",
     "group": "auto",
-    "enabled": false,
+    "enabled": true,
     "priority": 96
   },
   {
@@ -772,7 +772,7 @@
     "name": "🔞玉兔资源",
     "baseUrl": "https://apiyutu.com/api.php/provide/vod",
     "group": "auto",
-    "enabled": false,
+    "enabled": true,
     "priority": 97
   },
   {
@@ -780,7 +780,7 @@
     "name": "🔞森林资源",
     "baseUrl": "https://beiyong.slapibf.com/api.php/provide/vod",
     "group": "auto",
-    "enabled": false,
+    "enabled": true,
     "priority": 98
   },
   {
@@ -804,7 +804,7 @@
     "name": "🔞黄色仓库",
     "baseUrl": "https://hsckzy.xyz/api.php/provide/vod",
     "group": "auto",
-    "enabled": false,
+    "enabled": true,
     "priority": 101
   },
   {
@@ -828,7 +828,7 @@
     "name": "🔞黑料资源",
     "baseUrl": "https://www.heiliaozyapi.com/api.php/provide/vod",
     "group": "auto",
-    "enabled": false,
+    "enabled": true,
     "priority": 104
   }
 ]

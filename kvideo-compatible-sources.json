@@ -204,7 +204,7 @@
     "name": "非凡采集",
     "baseUrl": "http://cj.ffzyapi.com/api.php/provide/vod",
     "group": "normal",
-    "enabled": true,
+    "enabled": false,
     "priority": 26
   },
   {
@@ -260,7 +260,7 @@
     "name": "光速HTTP",
     "baseUrl": "http://api.guangsuapi.com/api.php/provide/vod",
     "group": "normal",
-    "enabled": true,
+    "enabled": false,
     "priority": 33
   },
   {
@@ -692,7 +692,7 @@
     "name": "麻豆视频",
     "baseUrl": "http://madouse.la/api.php/provide/vod",
     "group": "auto",
-    "enabled": true,
+    "enabled": false,
     "priority": 87
   },
   {

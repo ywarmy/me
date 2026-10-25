@@ -4,7 +4,7 @@
     "name": "非凡资源",
     "baseUrl": "http://ffzy5.tv/api.php/provide/vod",
     "group": "normal",
-    "enabled": true,
+    "enabled": false,
     "priority": 1
   },
   {
@@ -76,7 +76,7 @@
     "name": "360资源",
     "baseUrl": "https://360zy.com/api.php/provide/vod",
     "group": "normal",
-    "enabled": true,
+    "enabled": false,
     "priority": 10
   },
   {
@@ -92,7 +92,7 @@
     "name": "如意资源",
     "baseUrl": "https://cj.rycjapi.com/api.php/provide/vod",
     "group": "normal",
-    "enabled": true,
+    "enabled": false,
     "priority": 12
   },
   {
@@ -108,7 +108,7 @@
     "name": "红牛资源",
     "baseUrl": "https://www.hongniuzy2.com/api.php/provide/vod",
     "group": "normal",
-    "enabled": true,
+    "enabled": false,
     "priority": 14
   },
   {
@@ -292,7 +292,7 @@
     "name": "U酷资源88",
     "baseUrl": "https://api.ukuapi88.com/api.php/provide/vod",
     "group": "normal",
-    "enabled": true,
+    "enabled": false,
     "priority": 37
   },
   {
@@ -300,7 +300,7 @@
     "name": "无尽CC",
     "baseUrl": "https://api.wujinapi.cc/api.php/provide/vod",
     "group": "normal",
-    "enabled": true,
+    "enabled": false,
     "priority": 38
   },
   {
@@ -308,7 +308,7 @@
     "name": "丫丫点播",
     "baseUrl": "https://cj.yayazy.net/api.php/provide/vod",
     "group": "normal",
-    "enabled": true,
+    "enabled": false,
     "priority": 39
   },
   {
@@ -620,7 +620,7 @@
     "name": "奥斯卡资源",
     "baseUrl": "https://aosikazy.com/api.php/provide/vod",
     "group": "premium",
-    "enabled": true,
+    "enabled": false,
     "priority": 78
   },
   {

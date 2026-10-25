@@ -364,7 +364,7 @@
     "name": "牛牛点播",
     "baseUrl": "https://api.niuniuzy.me/api.php/provide/vod",
     "group": "normal",
-    "enabled": true,
+    "enabled": false,
     "priority": 46
   },
   {
@@ -710,5 +710,125 @@
     "group": "auto",
     "enabled": true,
     "priority": 89
+  },
+  {
+    "id": "auto_360zyzz.com",
+    "name": "🎬360 资源",
+    "baseUrl": "https://360zyzz.com/api.php/provide/vod",
+    "group": "auto",
+    "enabled": true,
+    "priority": 90
+  },
+  {
+    "id": "auto_api.ddapi.cc",
+    "name": "🔞滴滴资源",
+    "baseUrl": "https://api.ddapi.cc/api.php/provide/vod",
+    "group": "auto",
+    "enabled": true,
+    "priority": 91
+  },
+  {
+    "id": "auto_api.douapi.cc",
+    "name": "🔞豆豆资源",
+    "baseUrl": "https://api.douapi.cc/api.php/provide/vod",
+    "group": "auto",
+    "enabled": true,
+    "priority": 92
+  },
+  {
+    "id": "auto_api.maoyanapi.top",
+    "name": "🎬猫眼资源",
+    "baseUrl": "https://api.maoyanapi.top/api.php/provide/vod",
+    "group": "auto",
+    "enabled": true,
+    "priority": 93
+  },
+  {
+    "id": "auto_api.souavzyw.net",
+    "name": "🔞souavZY",
+    "baseUrl": "https://api.souavzyw.net/api.php/provide/vod",
+    "group": "auto",
+    "enabled": true,
+    "priority": 94
+  },
+  {
+    "id": "auto_apidanaizi.com",
+    "name": "🔞-大奶子-",
+    "baseUrl": "https://apidanaizi.com/api.php/provide/vod",
+    "group": "auto",
+    "enabled": true,
+    "priority": 95
+  },
+  {
+    "id": "auto_apilj.com",
+    "name": "🔞辣椒资源",
+    "baseUrl": "https://apilj.com/api.php/provide/vod",
+    "group": "auto",
+    "enabled": true,
+    "priority": 96
+  },
+  {
+    "id": "auto_apiyutu.com",
+    "name": "🔞玉兔资源",
+    "baseUrl": "https://apiyutu.com/api.php/provide/vod",
+    "group": "auto",
+    "enabled": true,
+    "priority": 97
+  },
+  {
+    "id": "auto_beiyong.slapibf.com",
+    "name": "🔞森林资源",
+    "baseUrl": "https://beiyong.slapibf.com/api.php/provide/vod",
+    "group": "auto",
+    "enabled": true,
+    "priority": 98
+  },
+  {
+    "id": "auto_caiji.dbzy5.com",
+    "name": "🎬豆瓣资源",
+    "baseUrl": "https://caiji.dbzy5.com/api.php/provide/vod",
+    "group": "auto",
+    "enabled": true,
+    "priority": 99
+  },
+  {
+    "id": "auto_cj.lzcaiji.com",
+    "name": "🎬量子资源",
+    "baseUrl": "https://cj.lzcaiji.com/api.php/provide/vod",
+    "group": "auto",
+    "enabled": true,
+    "priority": 100
+  },
+  {
+    "id": "auto_hsckzy.xyz",
+    "name": "🔞黄色仓库",
+    "baseUrl": "https://hsckzy.xyz/api.php/provide/vod",
+    "group": "auto",
+    "enabled": true,
+    "priority": 101
+  },
+  {
+    "id": "auto_iqiyizyapi.com",
+    "name": "🎬-爱奇艺-",
+    "baseUrl": "https://iqiyizyapi.com/api.php/provide/vod",
+    "group": "auto",
+    "enabled": true,
+    "priority": 102
+  },
+  {
+    "id": "auto_thzy1.me",
+    "name": "🔞桃花资源",
+    "baseUrl": "https://thzy1.me/api.php/provide/vod",
+    "group": "auto",
+    "enabled": true,
+    "priority": 103
+  },
+  {
+    "id": "auto_www.heiliaozyapi.com",
+    "name": "🔞黑料资源",
+    "baseUrl": "https://www.heiliaozyapi.com/api.php/provide/vod",
+    "group": "auto",
+    "enabled": true,
+    "priority": 104
   }
 ]

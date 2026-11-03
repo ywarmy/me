@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name Google 搜索优化（iOS）
-// @version 1.3
-// @description 固定简体中文界面，不限制搜索结果语言
+// @version 1.4
+// @description 固定简体中文界面，搜索结果限定为中文和英文
 // @match *://www.google.com/search*
 // @match *://www.google.com.hk/search*
 // @match *://www.google.co.jp/search*
@@ -16,9 +16,9 @@ if (url.searchParams.get('hl') !== 'zh-CN') {
 url.searchParams.set('hl', 'zh-CN');
 changed = true;
 }
-// 2. 删除语言限制，允许中文、英文、日文等搜索结果
-if (url.searchParams.has('lr')) {
-url.searchParams.delete('lr');
+// 2. 限定搜索结果为中文和英文（多语言用 | 连接）
+if (url.searchParams.get('lr') !== 'lang_zh|lang_en') {
+url.searchParams.set('lr', 'lang_zh|lang_en');
 changed = true;
 }
 // 3. 仅在参数发生变化时跳转

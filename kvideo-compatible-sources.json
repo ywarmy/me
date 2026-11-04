@@ -116,7 +116,7 @@
     "name": "光速资源",
     "baseUrl": "https://api.guangsuapi.com/api.php/provide/vod",
     "group": "normal",
-    "enabled": false,
+    "enabled": true,
     "priority": 15
   },
   {
@@ -236,7 +236,7 @@
     "name": "暴风APP",
     "baseUrl": "https://app.bfzyapi.com/api.php/provide/vod",
     "group": "normal",
-    "enabled": false,
+    "enabled": true,
     "priority": 30
   },
   {

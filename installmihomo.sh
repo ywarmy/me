@@ -57,7 +57,7 @@ MIHOMO_SERVICE="/etc/systemd/system/mihomo.service"
 SYSCTL_FILE="/etc/sysctl.d/99-mihomo-tproxy.conf"
 SYSCTL_BACKUP_FILE="${BACKUP_DIR}/sysctl.before-mihomo"
 
-LAN_IF=""
+LAN_IF="${LAN_IF:-}"
 LAN_IP_CIDR=""
 LAN_CIDR=""
 
@@ -228,37 +228,131 @@ check_system() {
 
 }
 
-detect_lan_network() {
+###############################################################################
+# 选择面向 LAN 的网卡
+#
+# 安装流程与健康检查必须共用同一个判据，否则会出现
+# "装到了 A 网卡，检查也用同一套错逻辑算出 A，于是检查通过但实际不生效"。
+#
+# 输出：网卡名；无法唯一确定时输出空行。
+###############################################################################
 
-    log "识别 LAN 网卡和网段"
+pick_lan_iface() {
 
     local default_if=""
-    local candidate_if=""
-    local candidate_cidr=""
+    local iface=""
+    local cidr=""
+    local chosen=""
+    local i=0
+    local count=0
+    local candidate_ifaces=()
 
     default_if="$(
         ip -4 route show default 2>/dev/null |
         awk 'NR==1 {for (i=1; i<=NF; i++) if ($i=="dev") {print $(i+1); exit}}'
     )"
 
-    # 网关设备通常同时有 WAN 和 LAN 网卡。优先选择带私网 IPv4 的网卡，
-    # 没有私网网卡时再回退到默认路由网卡。
-    LAN_IF=""
-    while read -r candidate_if candidate_cidr; do
-        case "$candidate_cidr" in
-            10.*|192.168.*|172.1[6-9].*|172.2[0-9].*|172.3[0-1].*)
-                LAN_IF="$candidate_if"
-                break
+    while read -r iface cidr; do
+
+        [ -n "$iface" ] || continue
+
+        #
+        # 虚拟 / 隧道网卡：即使拿到私网地址也不面向 LAN
+        #
+        case "$iface" in
+            lo|docker*|br-*|veth*|virbr*|tun*|tap*|tailscale*|zt*|cni*|flannel*|kube*|wg*|ppp*)
+                continue
                 ;;
         esac
+
+        case "$cidr" in
+            10.*|192.168.*|172.1[6-9].*|172.2[0-9].*|172.3[0-1].*)
+                candidate_ifaces+=("$iface")
+                ;;
+        esac
+
     done < <(
         ip -o -4 addr show scope global 2>/dev/null |
         awk '$3 == "inet" {print $2, $4}' || true
     )
 
-    [ -n "$LAN_IF" ] || LAN_IF="$default_if"
+    count="${#candidate_ifaces[@]}"
 
-    [ -n "$LAN_IF" ] || die "没有找到默认路由网卡"
+    #
+    # 没有私网网卡：旁路由 / 单网卡直连宽带，用默认路由网卡
+    #
+    if [ "$count" -eq 0 ]; then
+        printf '%s\n' "$default_if"
+        return 0
+    fi
+
+    if [ "$count" -eq 1 ]; then
+        printf '%s\n' "${candidate_ifaces[0]}"
+        return 0
+    fi
+
+    #
+    # 多张私网网卡：
+    #
+    # 典型是"光猫拨号 + 路由器二次 NAT"——WAN 也从光猫拿到 192.168.x，
+    # 两张网卡都是私网。此时必须排除承载默认路由的 WAN，
+    # 剩下那张才是面向 LAN 的。
+    #
+    for i in "${!candidate_ifaces[@]}"; do
+
+        if [ "${candidate_ifaces[$i]}" = "$default_if" ]; then
+            continue
+        fi
+
+        if [ -n "$chosen" ]; then
+            # 仍然多于一张，无法自动判断
+            printf '%s\n' ""
+            return 0
+        fi
+
+        chosen="${candidate_ifaces[$i]}"
+
+    done
+
+    if [ -z "$chosen" ]; then
+        chosen="$default_if"
+    fi
+
+    printf '%s\n' "$chosen"
+}
+
+
+detect_lan_network() {
+
+    log "识别 LAN 网卡和网段"
+
+    if [ -z "$LAN_IF" ]; then
+        LAN_IF="$(pick_lan_iface)"
+    fi
+
+    if [ -z "$LAN_IF" ]; then
+
+        #
+        # 排除默认路由网卡后仍不唯一：这里不能猜。
+        # 猜错会让 nft 的 LAN 规则整体空转，而且不会报错。
+        #
+        echo
+        warn "检测到多张私网网卡，无法唯一确定面向 LAN 的那张："
+        echo
+
+        ip -o -4 addr show scope global 2>/dev/null |
+            awk '$3 == "inet" {print "    " $2 "  " $4}' || true
+
+        echo
+
+        if [ -t 0 ]; then
+            read -r -p "请输入 LAN 网卡名（留空退出）：" LAN_IF || true
+        fi
+
+        [ -n "$LAN_IF" ] ||
+            die "未指定 LAN 网卡；可用 LAN_IF=<网卡名> $0 install 指定"
+
+    fi
 
     LAN_IP_CIDR="$(
         ip -o -4 addr show dev "$LAN_IF" scope global 2>/dev/null |
@@ -651,6 +745,7 @@ create_embedded_config() {
 
     local TARGET="$1"
     local SUBSCRIPTION_URL="$2"
+    local API_SECRET="${3:-}"
 
     cat > "$TARGET" <<'EOF'
 proxy-providers:
@@ -693,7 +788,7 @@ profile:
 
 # 控制面板
 external-controller: 0.0.0.0:9090
-secret: ""
+secret: "__MIHOMO_API_SECRET__"
 external-ui: "/etc/mihomo/ui"
 external-ui-name: zashboard
 external-ui-url: "https://github.com/Zephyruso/zashboard/archive/refs/heads/gh-pages.zip"
@@ -797,6 +892,37 @@ rule-providers:
   cn_ip: { <<: *ip, url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geoip/cn.mrs"}
 
 EOF
+
+    #
+    # 控制面板鉴权：
+    #
+    # secret 在 heredoc 里以占位符写入，这里替换成真正生成的值。
+    # 用临时文件 + cat 回写，避免依赖 sed -i 的跨平台差异；
+    # secret 只含 [0-9a-f]，不会破坏 sed 的 | 分隔符。
+    #
+    if [ -n "$API_SECRET" ]; then
+
+        local SECRET_TMP=""
+
+        SECRET_TMP="$(mktemp /tmp/mihomo-secret.XXXXXX)"
+        sed "s|__MIHOMO_API_SECRET__|${API_SECRET}|g" "$TARGET" > "$SECRET_TMP"
+        cat "$SECRET_TMP" > "$TARGET"
+        rm -f "$SECRET_TMP"
+
+    else
+
+        #
+        # 没给 secret 时必须留空，否则面板会带着字面占位符运行。
+        #
+        local SECRET_TMP_EMPTY=""
+
+        SECRET_TMP_EMPTY="$(mktemp /tmp/mihomo-secret.XXXXXX)"
+        sed 's|__MIHOMO_API_SECRET__||g' "$TARGET" > "$SECRET_TMP_EMPTY"
+        cat "$SECRET_TMP_EMPTY" > "$TARGET"
+        rm -f "$SECRET_TMP_EMPTY"
+
+    fi
+
 }
 
 
@@ -807,6 +933,7 @@ install_config() {
     local CONFIG_TO_INSTALL="$CONFIG_SOURCE"
     local GENERATED_CONFIG=""
     local SUBSCRIPTION_URL=""
+    local API_SECRET=""
 
     if [ ! -f "$CONFIG_SOURCE" ]; then
         echo
@@ -826,7 +953,16 @@ install_config() {
         done
 
         GENERATED_CONFIG="$(mktemp /tmp/mihomo-config.XXXXXX)"
-        create_embedded_config "$GENERATED_CONFIG" "$SUBSCRIPTION_URL"
+
+        #
+        # 控制面板 secret：随机 32 位十六进制。
+        #
+        # 用 od 读固定 16 字节而不是 `tr < /dev/urandom | head -c`：
+        # 后者会让 tr 收到 SIGPIPE，在 pipefail 下赋值直接失败。
+        #
+        API_SECRET="$(od -An -tx1 -N16 /dev/urandom | tr -d ' \n')"
+
+        create_embedded_config "$GENERATED_CONFIG" "$SUBSCRIPTION_URL" "$API_SECRET"
         CONFIG_TO_INSTALL="$GENERATED_CONFIG"
     fi
 
@@ -853,12 +989,76 @@ install_config() {
 
     [ -n "$GENERATED_CONFIG" ] && rm -f "$GENERATED_CONFIG"
 
+    #
+    # 外置 config.yaml 的 secret 为空时，在部署阶段补一个 secret。
+    #
+    # 仓库里的 config.yaml 是公开的，不能预埋固定 secret（等于公开）；
+    # 所以按机器生成，只写进 /etc/mihomo/config.yaml。
+    # 已部署过的机器沿用原 secret，避免每次重装都换掉用户手里的值。
+    #
+    local DEPLOY_SECRET=""
+    local EXISTING_SECRET=""
+
+    DEPLOY_SECRET="$(
+        awk '
+            /^[[:space:]]*secret:/ {
+                sub(/^[^:]*:[[:space:]]*/, "")
+                print
+                exit
+            }
+        ' "$MIHOMO_CONFIG" |
+        tr -d "\"' \t"
+    )"
+
+    if [ -z "$DEPLOY_SECRET" ] &&
+       grep -Eq '^[[:space:]]*external-controller:[[:space:]]*"?0\.0\.0\.0' "$MIHOMO_CONFIG"; then
+
+        if [ -n "${backup:-}" ] && [ -f "${backup:-}" ]; then
+
+            EXISTING_SECRET="$(
+                awk '
+                    /^[[:space:]]*secret:/ {
+                        sub(/^[^:]*:[[:space:]]*/, "")
+                        print
+                        exit
+                    }
+                ' "$backup" |
+                tr -d "\"' \t"
+            )"
+
+        fi
+
+        local SECRET_INJECT_TMP=""
+
+        if [ -n "$EXISTING_SECRET" ]; then
+            API_SECRET="$EXISTING_SECRET"
+            ok "控制面板 secret 为空，沿用已有 secret"
+        else
+            API_SECRET="$(od -An -tx1 -N16 /dev/urandom | tr -d ' \n')"
+            ok "控制面板 secret 为空，已生成随机 secret"
+        fi
+
+        SECRET_INJECT_TMP="$(mktemp /tmp/mihomo-secret.XXXXXX)"
+
+        sed "s|^\([[:space:]]*secret:\).*|\1 \"${API_SECRET}\"|" "$MIHOMO_CONFIG" > "$SECRET_INJECT_TMP"
+        cat "$SECRET_INJECT_TMP" > "$MIHOMO_CONFIG"
+        rm -f "$SECRET_INJECT_TMP"
+
+    fi
+
     chown "$MIHOMO_USER:$MIHOMO_GROUP" "$MIHOMO_CONFIG" 2>/dev/null || true
 
     chmod 600 "$MIHOMO_CONFIG"
     CONFIG_CHANGED=1
 
     ok "config.yaml 安装完成"
+
+    if [ -n "$API_SECRET" ]; then
+        echo
+        ok "控制面板 secret：$API_SECRET"
+        echo "    面板：http://<网关IP>:9090/ui     Secret 填上面的值"
+        echo "    请自行保存；忘记可用：grep '^secret:' $MIHOMO_CONFIG"
+    fi
 
 }
 
@@ -900,6 +1100,34 @@ check_required_config() {
         "^[[:space:]]*mixed-port:[[:space:]]*${MIXED_PORT}[[:space:]]*$" \
         "$MIHOMO_CONFIG" ||
         warn "没有检测到 mixed-port: $MIXED_PORT"
+
+
+    #
+    # 控制面板鉴权：
+    #
+    # external-controller 监听 0.0.0.0 且 secret 为空时，
+    # 局域网内任何设备都能完全接管代理、读走订阅地址。
+    #
+    local PANEL_SECRET=""
+
+    PANEL_SECRET="$(
+        awk '
+            /^[[:space:]]*secret:/ {
+                sub(/^[^:]*:[[:space:]]*/, "")
+                print
+                exit
+            }
+        ' "$MIHOMO_CONFIG" |
+        tr -d "\"' \t"
+    )"
+
+    if [ -z "$PANEL_SECRET" ] &&
+       grep -Eq '^[[:space:]]*external-controller:[[:space:]]*"?0\.0\.0\.0' "$MIHOMO_CONFIG"; then
+
+        warn "控制面板对外监听且 secret 为空：局域网内可被任何人接管"
+        warn "建议设置 secret，或改成 external-controller: 127.0.0.1:9090"
+
+    fi
 
 
     if grep -Eq \
@@ -1772,8 +2000,68 @@ start_nftables() {
         return 0
     fi
 
-    systemctl restart nftables
-    ok "nftables 已启动/重启"
+    #
+    # 不走 systemctl restart nftables：
+    #
+    # Debian / Ubuntu 的 nftables.service 带
+    #
+    #     ExecStop=/usr/sbin/nft flush ruleset
+    #
+    # restart 会先 flush 掉内核里所有 family 的所有表，
+    # docker / podman / systemd-nspawn / fail2ban 运行时写入的
+    # 表会一起丢失（容器网络直接断），且不会自己恢复。
+    #
+    # 而手工把 ExecStop 覆盖成空的机器，restart 又会在已有表上
+    # 重复 nft -f，报 "File exists" 让整个事务失败。
+    #
+    # 所以这里只重新加载我们自己的表，不动 service 状态；
+    # service 保持 enabled 即可（开机时 conf 里会 flush 后 include 本文件）。
+    #
+
+    if ! nft -c -f "$NFT_FILE"; then
+        die "nftables 规则语法检查失败：$NFT_FILE（内核规则未改动）"
+    fi
+
+    if nft list table ip mihomo >/dev/null 2>&1; then
+        nft delete table ip mihomo
+    fi
+
+    if ! nft -f "$NFT_FILE"; then
+        die "nftables 规则加载失败：$NFT_FILE"
+    fi
+
+    ok "nftables 规则已重新加载（未重启 service）"
+
+}
+
+
+###############################################################################
+# 临时撤销 TProxy 劫持
+#
+# Mihomo 没起来 / 被手动停掉时，nft 里的 TPROXY 规则与 fwmark 策略路由
+# 仍然在内核里生效：新连接会被送进一个没人监听的端口，表现为本机与 LAN
+# 全部断网（ping 还能通，所以很容易误判成 DNS 问题）。
+#
+# 这里只撤我们自己的表与规则，不碰别人的。
+###############################################################################
+
+cleanup_tproxy_hijack() {
+
+    if nft list table ip mihomo >/dev/null 2>&1; then
+
+        nft delete table ip mihomo 2>/dev/null || true
+        warn "已撤销 nft TProxy 规则"
+
+    fi
+
+    while ip rule show 2>/dev/null |
+        grep -Eq "fwmark ${MARK}.*lookup ${TABLE}"; do
+
+        ip rule del fwmark "$MARK" table "$TABLE" 2>/dev/null || break
+
+    done
+
+    ip route flush table "$TABLE" 2>/dev/null || true
 
 }
 
@@ -1807,7 +2095,13 @@ start_mihomo() {
             -n 100 \
             --no-pager
 
-        die "Mihomo 启动失败"
+        #
+        # Mihomo 没起来，但 nft / 策略路由已经生效，
+        # 留着就是"整机断网"。先撤掉劫持，保证还能 apt / ssh / 改配置。
+        #
+        cleanup_tproxy_hijack
+
+        die "Mihomo 启动失败（已临时撤销 nft/策略路由，可正常联网；修复后重跑 install）"
 
     fi
 
@@ -1848,7 +2142,7 @@ health_check() {
 
     local REQUIRED_TOOLS=""
     local DEFAULT_ROUTE=""
-    local LAN_IF=""
+    local LAN_IF="${LAN_IF:-}"
     local LAN_IP=""
     local LAN_CIDR=""
     local GATEWAY=""
@@ -1959,39 +2253,37 @@ health_section "二、自动识别网络"
 
 DEFAULT_ROUTE="$(ip -4 route show default 2>/dev/null | head -n1 || true)"
 
-LAN_IF=""
-
-while read -r candidate_if candidate_cidr; do
-    case "$candidate_cidr" in
-        10.*|192.168.*|172.1[6-9].*|172.2[0-9].*|172.3[0-1].*)
-            LAN_IF="$candidate_if"
-            break
-            ;;
-    esac
-done < <(
-    ip -o -4 addr show scope global 2>/dev/null |
-    awk '$3 == "inet" {print $2, $4}' || true
-)
-
-if [ -z "$LAN_IF" ] && [ -n "$DEFAULT_ROUTE" ]; then
-    LAN_IF="$(
-        echo "$DEFAULT_ROUTE" |
-        awk '
-        {
-            for (i=1; i<=NF; i++) {
-                if ($i=="dev") {
-                    print $(i+1)
-                    exit
-                }
-            }
-        }'
-    )"
-fi
+LAN_IF="$(pick_lan_iface || true)"
 
 if [ -n "$LAN_IF" ]; then
+
     health_pass "LAN 网卡：$LAN_IF"
+
+    #
+    # 独立提示：LAN 网卡是否就是承载默认路由的那张，
+    # 以及系统里还有没有别的私网网卡。
+    #
+    # 双私网（光猫拨号 + 二次 NAT）是选错网卡的高发场景，
+    # 这里把候选全部列出来，避免"检查通过但实际没生效"。
+    #
+    OTHER_PRIVATE_IFACES="$(
+        ip -o -4 addr show scope global 2>/dev/null |
+        awk '$3 == "inet" {print $2}' |
+        grep -vxF "$LAN_IF" |
+        grep -vE '^(lo|docker.*|br-.*|veth.*|virbr.*|tun.*|tap.*|tailscale.*|zt.*|cni.*|flannel.*|kube.*|wg.*|ppp.*)$' |
+        tr '\n' ' ' || true
+    )"
+
+    if [ -n "$OTHER_PRIVATE_IFACES" ]; then
+
+        health_info "其它私网网卡：$OTHER_PRIVATE_IFACES（如有 LAN 侧网卡，请用 LAN_IF=<网卡名> 重装）"
+
+    fi
+
 else
-    health_fail "无法自动识别默认路由网卡"
+
+    health_fail "无法自动识别 LAN 网卡（多张私网网卡或没有默认路由）"
+
 fi
 
 ###############################################################################
@@ -2233,13 +2525,29 @@ echo "========== ip -4 rule =========="
 
 ip -4 rule
 
+#
+# 先按 pref=${RULE_PRIORITY} + lookup ${TABLE} 精确定位本方案的规则，
+# 避免机器上还有 WireGuard / Tailscale 等 fwmark 规则时认领错对象。
+#
 POLICY_LINE="$(
     ip -4 rule 2>/dev/null |
-    grep -E 'fwmark [^ ]+.*lookup [0-9]+' |
-    grep -v 'lookup main' |
+    grep -E "^${RULE_PRIORITY}:" |
+    grep -E "fwmark [^ ]+.*lookup ${TABLE}\$" |
     head -n1 ||
     true
 )"
+
+if [ -z "$POLICY_LINE" ]; then
+
+    POLICY_LINE="$(
+        ip -4 rule 2>/dev/null |
+        grep -E 'fwmark [^ ]+.*lookup [0-9]+' |
+        grep -v 'lookup main' |
+        head -n1 ||
+        true
+    )"
+
+fi
 
 MARK=""
 TABLE=""
@@ -2599,8 +2907,36 @@ else
     echo "OUTPUT mark 路由测试："
     echo "$OUTPUT_MARK_ROUTE"
 
-    if echo "$OUTPUT_MARK_ROUTE" | grep -Eq \
-        'local .* dev lo .*mark 1|local .* dev lo .*mark 0x1'; then
+    #
+    # 必须用实际发现的 $MARK，不能硬编码。
+    #
+    # 注意两种写法都要认：
+    #   ip rule        → fwmark 0x1        （十六进制，带 0x）
+    #   ip route get   → mark 1            （部分 iproute2 版本打印十进制）
+    # 所以这里把回显里的 mark 取出来，和 MARK 的十进制/十六进制形式逐一比对，
+    # 而不是做子串匹配（"mark 0x10" 也不能被 0x1 命中）。
+    #
+    local ROUTE_MARK=""
+    local MARK_DEC=""
+    local MARK_HEX=""
+
+    if [ -n "${MARK:-}" ]; then
+
+        MARK_DEC="$((MARK))"
+        MARK_HEX="$(printf '0x%x' "$MARK_DEC")"
+
+        ROUTE_MARK="$(
+            printf '%s\n' "$OUTPUT_MARK_ROUTE" |
+            awk '{for (i=1; i<=NF; i++) if ($i == "mark") {print $(i+1); exit}}'
+        )"
+
+    fi
+
+    if echo "$OUTPUT_MARK_ROUTE" | grep -q 'local .* dev lo' &&
+       { [ -n "$ROUTE_MARK" ] &&
+         { [ "$ROUTE_MARK" = "$MARK" ] ||
+           [ "$ROUTE_MARK" = "$MARK_HEX" ] ||
+           [ "$ROUTE_MARK" = "$MARK_DEC" ]; }; }; then
 
         health_pass "OUTPUT → fwmark $MARK → table $TABLE → lo"
 
@@ -3007,16 +3343,16 @@ if [ -n "$NFT_RULES" ]; then
 
     COUNTER_LINES="$(
         echo "$NFT_RULES" |
-        grep -E 'counter|tproxy|mark set' |
-        head -n50 ||
+        grep -E 'counter packets' |
+        head -n5 ||
         true
     )"
 
     if [ -n "$COUNTER_LINES" ]; then
         echo "$COUNTER_LINES"
-        health_pass "发现 nft 流量统计规则"
+        health_pass "nft 规则带 counter，可统计流量"
     else
-        health_warn "没有发现明显 nft counter"
+        health_info "nft 规则未启用 counter（本方案默认不需要）"
     fi
 
 else
@@ -3086,6 +3422,22 @@ if [ -n "$NFT_RULES" ]; then
 
     fi
 
+    #
+    # 上面的 grep 里 accept 必然命中（每个 chain 都有 policy accept），
+    # 属于恒真，不能作为结论。真正的判据是这两条：
+    #
+    if echo "$NFT_RULES" | grep -q 'meta skuid'; then
+        health_pass "已放行 Mihomo 自身流量（meta skuid）"
+    else
+        health_warn "缺少 meta skuid 放行，Mihomo 出站可能形成回环"
+    fi
+
+    if echo "$NFT_RULES" | grep -q '192.168.0.0/16'; then
+        health_pass "已跳过私有网段（含 192.168.0.0/16）"
+    else
+        health_warn "未见私有网段排除，LAN 侧访问内网会被误代理"
+    fi
+
 fi
 
 ###############################################################################
@@ -3135,7 +3487,7 @@ health_section "二十五、Mihomo 日志错误扫描"
 # 读取最近日志
 MIHOMO_RECENT_LOG="$(
     journalctl -u "$HEALTH_SERVICE" \
-        -n 10 \
+        -n 100 \
         --no-pager \
         2>/dev/null || true
 )"
@@ -3497,8 +3849,10 @@ check_nm() {
             ;;
 
         "connected")
-            network_warn "NetworkManager 正在主动管理 $IFACE。"
-            network_warn "本脚本不会删除当前连接。"
+            # NM 管理网卡是正常状态（本脚本就是用 NM 改 IP 的），
+            # 不能计入 CHECK_ISSUES，否则摘要永远显示"发现 2 个问题"。
+            network_info "NetworkManager 正在主动管理 $IFACE（正常状态）。"
+            network_info "本脚本不会删除当前连接。"
             ;;
 
         "")
@@ -4270,9 +4624,14 @@ mihomo_config_value() {
 
     case "$KEY" in
         dns.listen)
+            # 必须限定在 dns: 段内取 listen，否则会读到文件里第一个 listen:
             awk '
-                /^[[:space:]]*listen:/ {
-                    sub(/^[^:]*:[[:space:]]*/, "")
+                /^[^[:space:]#]/ {
+                    in_dns = ($0 ~ /^dns:[[:space:]]*$/)
+                    next
+                }
+                in_dns && /^[[:space:]]+listen:/ {
+                    sub(/^[[:space:]]*listen:[[:space:]]*/, "")
                     print
                     exit
                 }
@@ -5275,16 +5634,9 @@ check_network() {
             tr -d "'" || true
         )"
 
-        DNS_LISTEN="$(
-            awk '
-                /^  listen:/ {
-                    print $2
-                    exit
-                }
-            ' "$NETWORK_MIHOMO_CONFIG" |
-            tr -d '"' |
-            tr -d "'" || true
-        )"
+        # 与 check_mihomo_config_port 共用同一份解析（按 dns: 段定位），
+        # 不再用一个硬编码两空格缩进的 awk。
+        DNS_LISTEN="$(mihomo_config_value dns.listen "$NETWORK_MIHOMO_CONFIG" || true)"
 
         if [ -n "$FAKE_IP_RANGE" ]; then
             echo "Fake-IP：     $FAKE_IP_RANGE"
@@ -5552,6 +5904,12 @@ configure_dhcp_nm() {
 configure_dhcp_networkd() {
 
     local IFACE="$1"
+
+    #
+    # 必须 local：NETWORK_FILE 是脚本级全局（write_network_config /
+    # restore_network_config 依赖它），这里覆盖会让后续写入/回滚指向错文件。
+    #
+    local NETWORK_FILE=""
 
     for NETWORK_FILE in "$NETWORK_DIR"/*.network; do
         [ -f "$NETWORK_FILE" ] || continue

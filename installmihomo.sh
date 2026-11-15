@@ -816,7 +816,7 @@ install_config() {
         echo
 
         while true; do
-            read -r -p "Airport1 URL：" SUBSCRIPTION_URL
+            read -r -p "Airport1 URL：" SUBSCRIPTION_URL || die "需要交互输入订阅地址，但 stdin 已结束；可在脚本目录放置 config.yaml 后重试"
 
             if [[ "$SUBSCRIPTION_URL" =~ ^https?://[^[:space:]\"\\]+$ ]]; then
                 break
@@ -1711,11 +1711,28 @@ reload_systemd() {
 
 enable_services() {
 
-    systemctl enable nftables
-    systemctl enable mihomo-policy
-    systemctl enable mihomo
+    local service=""
+    local failed=0
 
-    ok "服务已设置开机启动"
+    #
+    # 任一服务设置开机启动失败都不应中断安装：
+    # 此时 nft / 策略路由可能已经生效，中断会留下半成品状态。
+    #
+
+    for service in nftables mihomo-policy mihomo; do
+
+        if systemctl enable "$service" >/dev/null 2>&1; then
+            ok "已设置开机启动：$service"
+        else
+            warn "设置开机启动失败：$service（服务本次仍会尝试启动，请检查 systemctl status $service）"
+            failed=1
+        fi
+
+    done
+
+    if [ "$failed" -eq 0 ]; then
+        ok "服务已设置开机启动"
+    fi
 
 }
 
@@ -1800,188 +1817,6 @@ start_mihomo() {
 
 
 ###############################################################################
-# 检查策略路由
-###############################################################################
-
-check_policy() {
-
-    log "检查策略路由"
-
-    echo
-    echo "========== ip rule =========="
-
-    ip rule
-
-
-    echo
-    echo "========== table 100 =========="
-
-    ip route show table "$TABLE"
-
-
-    #
-    # 检查 fwmark
-    #
-
-    ip rule show |
-        grep -Eq "fwmark ${MARK}.*lookup $TABLE" ||
-        die "fwmark 策略路由不存在"
-
-
-    #
-    # Linux 不同版本可能显示：
-    #
-    # local default dev lo
-    #
-    # 或：
-    #
-    # local 0.0.0.0/0 dev lo
-    #
-
-    ip route show table "$TABLE" |
-        grep -Eq '^local (default|0\.0\.0\.0/0).*dev lo' ||
-        die "table 100 local route 不存在"
-
-
-    ok "策略路由正常"
-
-}
-
-
-###############################################################################
-# 检查 nft
-###############################################################################
-
-check_nft_runtime() {
-
-    log "检查 nftables 运行状态"
-
-    systemctl is-active --quiet nftables ||
-        die "nftables 没有运行"
-
-
-    nft list table ip mihomo >/dev/null 2>&1 ||
-        die "mihomo nft table 不存在"
-
-
-    nft list table ip mihomo
-
-    ok "nftables 正常"
-
-}
-
-
-###############################################################################
-# 检查 Mihomo
-###############################################################################
-
-check_mihomo_runtime() {
-
-    log "检查 Mihomo"
-
-    systemctl is-active --quiet mihomo ||
-        die "Mihomo 没有运行"
-
-
-    ok "Mihomo 正常运行"
-
-}
-
-
-###############################################################################
-# 检查端口
-###############################################################################
-
-check_ports() {
-
-    log "检查端口"
-
-    ss -lntup 2>/dev/null |
-        grep -E ":(${DNS_PORT}|${MIXED_PORT}|${TPROXY_PORT}|${API_PORT})\\b" ||
-        true
-
-}
-
-
-###############################################################################
-# 检查本机透明代理
-###############################################################################
-
-check_local_tproxy() {
-
-    log "检查本机 TProxy"
-
-    echo
-    echo "========== OUTPUT =========="
-
-    nft list chain ip mihomo output
-
-
-    echo
-    echo "========== PREROUTING =========="
-
-    nft list chain ip mihomo prerouting
-
-
-    echo
-    echo "说明："
-
-    echo "普通本机 TCP/UDP → OUTPUT mark → table 100 → PREROUTING → TProxy"
-
-    echo "Mihomo 自身 → skuid mihomo → return"
-
-    echo "LAN 客户端 → PREROUTING → TProxy"
-
-}
-
-
-###############################################################################
-# DNS 检查
-###############################################################################
-
-check_dns() {
-
-    log "检查 Mihomo DNS"
-
-    if ss -lntup 2>/dev/null |
-        grep -Eq '(\*|0\.0\.0\.0|\[::\]):53\b.*mihomo'; then
-
-        ok "Mihomo 正在监听 53"
-
-    else
-
-        warn "没有检测到 Mihomo 监听 53"
-
-    fi
-
-}
-
-
-###############################################################################
-# Fake-IP 检查
-###############################################################################
-
-check_fake_ip() {
-
-    log "检查 Fake-IP"
-
-    if grep -Eq \
-        '198\.18\.0\.0/16|198\.18\.0\.1/16' \
-        "$MIHOMO_CONFIG"; then
-
-        ok "检测到 Fake-IP 地址段"
-
-    else
-
-        warn "没有明确检测到 198.18.0.0/16 Fake-IP 配置"
-
-    fi
-
-}
-
-
-
-###############################################################################
 # 完整健康检查（由 check.sh 整合）
 ###############################################################################
 
@@ -2047,9 +1882,13 @@ health_check() {
     local V=""
     local COUNTER_LINES=""
     local BYPASS_COUNT=""
+    local BYPASS_LINES=""
     local MIHOMO_RECENT_LOG=""
     local LOG_ERRORS=""
     local SERVICE_FILE=""
+    local DEFAULT_COUNT=""
+    local TABLE_ROUTE=""
+    local API_CODE=""
 
     health_pass() {
         echo -e "${GREEN}[PASS]${RESET} $1"
@@ -3194,17 +3033,57 @@ health_section "二十二、检查常见直连排除规则"
 
 if [ -n "$NFT_RULES" ]; then
 
-    BYPASS_COUNT="$(
+    #
+    # 这里统计的是"直连 / 放行"类规则的数量，用来确认：
+    #
+    #   私有网段、组播、本机回环地址不会被送进代理
+    #   mihomo 自身流量被放行（否则会形成回环）
+    #
+    # 这些规则是本方案的正常配置，数量本身没有绝对意义，
+    # 只有一条都找不到时才需要留意。
+    #
+
+    BYPASS_LINES="$(
         echo "$NFT_RULES" |
-        grep -Eic \
+        grep -Ei \
         'return|accept|127\.0\.0\.0/8|224\.0\.0\.0/4|255\.255\.255\.255|localhost' ||
         true
     )"
 
+    BYPASS_COUNT="$(
+        printf '%s\n' "$BYPASS_LINES" |
+        sed '/^[[:space:]]*$/d' |
+        wc -l |
+        tr -d ' '
+    )"
+
     if [ "$BYPASS_COUNT" -gt 0 ]; then
-        health_info "发现 $BYPASS_COUNT 个常见 bypass/return 相关规则"
+
+        health_info "直连排除规则：$BYPASS_COUNT 条（私有网段 / 组播 / 本机地址 / mihomo 自身流量，属正常配置）"
+
+        echo
+        printf '%s\n' "$BYPASS_LINES" |
+            awk -v limit=12 '
+                /^[[:space:]]*$/ { next }
+                shown < limit {
+                    line=$0
+                    sub(/^[[:space:]]+/, "", line)
+                    print "    " line
+                    shown++
+                    next
+                }
+                { rest++ }
+                END {
+                    if (rest > 0) {
+                        printf "    ...（其余 %d 条省略）\n", rest
+                    }
+                }
+            '
+
     else
-        health_info "没有发现明显 bypass 规则"
+
+        health_info "没有发现直连排除规则，请确认私有网段、组播和 mihomo 自身流量是否会被误代理。"
+
     fi
 
 fi
@@ -3519,7 +3398,9 @@ detect_interface() {
 
     DEFAULT_IF="$(
         ip -4 route show default 2>/dev/null |
-        awk 'NR==1 {print $5}'
+        # 不能用固定列号：无网关的默认路由（PPPoE / WireGuard 等）
+        # 形如 “default dev ppp0 scope link”，第 5 列会是 scope/link。
+        awk 'NR==1 {for (i=1; i<=NF; i++) if ($i=="dev") {print $(i+1); exit}}'
     )"
 
     if [ -n "$DEFAULT_IF" ] &&
@@ -4140,6 +4021,7 @@ configure_ip() {
     local CURRENT_GATEWAY=""
     local IP_MANAGER=""
     local DEFAULT_ROUTE_COUNT=""
+    local CONFIRM=""
 
     IP_MANAGER="$(detect_ip_manager "$IFACE" || true)"
 
@@ -4159,7 +4041,7 @@ configure_ip() {
 
     while true; do
 
-        read -r -p "请输入本机 IP，例如 192.168.50.2： " IP_ADDR
+        read -r -p "请输入本机 IP，例如 192.168.50.2： " IP_ADDR || { network_warn "输入已结束，操作取消。"; return 1; }
 
         if validate_ipv4 "$IP_ADDR"; then
             break
@@ -4171,7 +4053,7 @@ configure_ip() {
 
     while true; do
 
-        read -r -p "请输入子网前缀长度 [默认 24]： " PREFIX
+        read -r -p "请输入子网前缀长度 [默认 24]： " PREFIX || { network_warn "输入已结束，操作取消。"; return 1; }
 
         PREFIX="${PREFIX:-24}"
 
@@ -4192,12 +4074,14 @@ configure_ip() {
 
     CURRENT_GATEWAY="$(
         ip -4 route show default dev "$IFACE" 2>/dev/null |
-        awk 'NR==1 {print $3}'
+        # 只取 via 后面的地址；无网关的默认路由（如 PPPoE）这里留空，
+        # 由 validate_ipv4 判断后转为手动输入。
+        awk 'NR==1 {for (i=1; i<=NF; i++) if ($i=="via") {print $(i+1); exit}}'
     )"
 
     if validate_ipv4 "$CURRENT_GATEWAY"; then
 
-        read -r -p "请输入网关 [默认 $CURRENT_GATEWAY]： " GATEWAY
+        read -r -p "请输入网关 [默认 $CURRENT_GATEWAY]： " GATEWAY || { network_warn "输入已结束，操作取消。"; return 1; }
 
         GATEWAY="${GATEWAY:-$CURRENT_GATEWAY}"
 
@@ -4205,7 +4089,7 @@ configure_ip() {
 
         while true; do
 
-            read -r -p "请输入网关，例如 192.168.50.1： " GATEWAY
+            read -r -p "请输入网关，例如 192.168.50.1： " GATEWAY || { network_warn "输入已结束，操作取消。"; return 1; }
 
             if validate_ipv4 "$GATEWAY"; then
                 break
@@ -4250,7 +4134,7 @@ configure_ip() {
     fi
     echo
 
-    read -r -p "确认修改？[Y/n] " CONFIRM
+    read -r -p "确认修改？[Y/n] " CONFIRM || { network_warn "输入已结束，操作取消。"; return 1; }
 
     CONFIRM="${CONFIRM:-Y}"
 
@@ -4341,16 +4225,16 @@ check_port() {
             OUTPUT="$(
                 ss -lntp 2>/dev/null |
                 grep -E ":${PORT}[[:space:]]" || true
-            )
+            )"
 
             ;;
 
-        udp_disabled)
+        udp)
 
             OUTPUT="$(
                 ss -lunp 2>/dev/null |
                 grep -E ":${PORT}[[:space:]]" || true
-            )
+            )"
 
             ;;
 
@@ -4558,18 +4442,44 @@ get_expected_ipv4() {
             fi
             ;;
         systemd-networkd)
-            for FILE in "$NETWORK_DIR"/*.network; do
+            #
+            # netplan 等工具把生成的 .network 放在 /run/systemd/network，
+            # 且 [Match] 常用 Name=en* 这类通配写法。
+            #
+            # 这里按 networkd 的优先级顺序扫描，并支持通配匹配。
+            #
+
+            for FILE in \
+                "$NETWORK_DIR"/*.network \
+                /run/systemd/network/*.network \
+                /usr/lib/systemd/network/*.network; do
+
                 [ -f "$FILE" ] || continue
+
                 if awk -v IFACE="$IFACE" '
                     /^[[:space:]]*\[Match\]/ { in_match=1; next }
                     /^\[/ { in_match=0 }
-                    in_match && $0 ~ "^[[:space:]]*Name=" IFACE "([[:space:]]|$)" { found=1 }
+                    in_match && /^[[:space:]]*Name=/ {
+                        line=$0
+                        sub(/^[[:space:]]*Name=[[:space:]]*/, "", line)
+                        count=split(line, names, /[[:space:]]+/)
+                        for (i=1; i<=count; i++) {
+                            pat=names[i]
+                            gsub(/\./, "\\.", pat)
+                            gsub(/\*/, ".*", pat)
+                            gsub(/\?/, ".", pat)
+                            if (IFACE ~ "^" pat "$") { found=1 }
+                        }
+                    }
                     END { exit(found ? 0 : 1) }
                 ' "$FILE"; then
+
                     EXPECTED="$(awk -F= '/^[[:space:]]*Address=/ {print $2; exit}' "$FILE")"
                     [ -n "$EXPECTED" ] || EXPECTED="DHCP/自动获取"
                     break
+
                 fi
+
             done
             ;;
         ifupdown)
@@ -4686,14 +4596,24 @@ write_resolv_conf() {
     local BACKUP=""
     local TEMP_FILE=""
 
-    if [ -L "$RESOLV_CONF" ]; then
-        network_error "$RESOLV_CONF 是软链接，未修改。"
-        network_warn "当前指向：$(readlink -f "$RESOLV_CONF" 2>/dev/null || echo 未知)"
-        network_warn "请先配置 systemd-resolved/NetworkManager，或手动确认后再由脚本接管。"
-        return 1
-    fi
+    #
+    # 与安装流程 configure_local_dns 保持一致：
+    # 软链接（例如 systemd-resolved 的 stub-resolv.conf）先备份，
+    # 再替换为普通文件，而不是直接拒绝。
+    #
 
-    if [ -e "$RESOLV_CONF" ]; then
+    if [ -L "$RESOLV_CONF" ]; then
+
+        BACKUP="${RESOLV_CONF}.bak.$(date +%Y%m%d-%H%M%S)"
+        cp -a "$RESOLV_CONF" "$BACKUP"
+
+        network_warn "$RESOLV_CONF 是软链接（→ $(readlink -f "$RESOLV_CONF" 2>/dev/null || echo 未知)），已备份并替换为普通文件。"
+        network_warn "如系统由 systemd-resolved 管理，建议执行 systemctl disable --now systemd-resolved，否则重启后可能被覆盖。"
+        network_warn "原链接备份：$BACKUP"
+
+        rm -f "$RESOLV_CONF"
+
+    elif [ -e "$RESOLV_CONF" ]; then
         BACKUP="${RESOLV_CONF}.bak.$(date +%Y%m%d-%H%M%S)"
         cp -a "$RESOLV_CONF" "$BACKUP"
         network_pass "原 resolv.conf 已备份：$BACKUP"
@@ -4711,6 +4631,9 @@ write_resolv_conf() {
 
 configure_dns() {
 
+    local DNS_CHOICE=""
+    local CONFIRM=""
+
     while true; do
 
         echo
@@ -4723,7 +4646,10 @@ configure_dns() {
         echo "0. 返回"
         echo
 
-        read -r -p "请选择 [0-2]： " DNS_CHOICE
+        if ! read -r -p "请选择 [0-2]： " DNS_CHOICE; then
+            network_warn "输入已结束，退出 DNS 配置。"
+            return 0
+        fi
 
         case "$DNS_CHOICE" in
 
@@ -4756,7 +4682,7 @@ configure_dns() {
                 echo "nameserver 127.0.0.1"
                 echo
 
-                read -r -p "确认修改 DNS？[Y/n] " CONFIRM
+                read -r -p "确认修改 DNS？[Y/n] " CONFIRM || { network_warn "输入已结束，操作取消。"; return 1; }
 
                 CONFIRM="${CONFIRM:-Y}"
 
@@ -4821,7 +4747,7 @@ configure_dns() {
 
                 while true; do
 
-                    read -r -p "DNS： " DNS
+                    read -r -p "DNS： " DNS || { network_warn "输入已结束，操作取消。"; return 1; }
 
                     if [ -z "$DNS" ]; then
                         break
@@ -4863,7 +4789,7 @@ configure_dns() {
 
                 echo
 
-                read -r -p "确认写入？[Y/n] " CONFIRM
+                read -r -p "确认写入？[Y/n] " CONFIRM || { network_warn "输入已结束，操作取消。"; return 1; }
 
                 CONFIRM="${CONFIRM:-Y}"
 
@@ -4933,7 +4859,7 @@ configure_dns() {
         esac
 
         echo
-        read -r -p "按 Enter 返回 DNS 菜单……" _
+        read -r -p "按 Enter 返回 DNS 菜单……" _ || true
 
         clear 2>/dev/null || true
 
@@ -4949,6 +4875,8 @@ check_network() {
     local IFACE="$1"
     local IP_MANAGER=""
     local EXPECTED_IPV4=""
+    local IPV4_LIST=()
+    local DEFAULT_ROUTES=()
 
     CHECK_MODE=1
     CHECK_ISSUES=0
@@ -5033,15 +4961,33 @@ check_network() {
 
     echo "配置 IPv4：   ${EXPECTED_IPV4:-未读取}"
 
-    if [ -n "$PRIMARY_IP" ] &&
-       [ "$EXPECTED_IPV4" != "DHCP" ] &&
-       [ "$EXPECTED_IPV4" != "DHCP/自动获取" ]; then
+    #
+    # 注意：
+    #
+    # 读不到配置（例如 netplan 把生成的 .network 放在 /run 下），
+    # 或者地址本来就是 DHCP 获取时，
+    # 不能判定"实际 IPv4 与配置不一致"：
+    # 那样会输出无法定位的告警，并被计入检查问题数。
+    #
+
+    if [ -z "$EXPECTED_IPV4" ]; then
+
+        network_info "没有读取到配置中的 IPv4，跳过一致性比对。"
+
+    elif [ "$EXPECTED_IPV4" = "DHCP" ] || [ "$EXPECTED_IPV4" = "DHCP/自动获取" ]; then
+
+        network_info "当前为 DHCP 自动获取，跳过一致性比对。"
+
+    elif [ -n "$PRIMARY_IP" ]; then
+
         EXPECTED_IP_ADDR="${EXPECTED_IPV4%%/*}"
+
         if [ "$PRIMARY_IP_ADDR" = "$EXPECTED_IP_ADDR" ]; then
             network_pass "实际 IPv4 与配置一致。"
         else
             network_warn "实际 IPv4 与配置不一致。"
         fi
+
     fi
 
     ###########################################################################
@@ -5106,12 +5052,14 @@ check_network() {
 
     GATEWAY="$(
         ip -4 route show default 2>/dev/null |
-        awk 'NR==1 {print $3}'
+        # 无网关的默认路由（PPPoE / WireGuard 等）没有 via 字段，
+        # 此时 GATEWAY 留空，由下面的分支给出提示。
+        awk 'NR==1 {for (i=1; i<=NF; i++) if ($i=="via") {print $(i+1); exit}}'
     )"
 
     GATEWAY_IF="$(
         ip -4 route show default 2>/dev/null |
-        awk 'NR==1 {print $5}'
+        awk 'NR==1 {for (i=1; i<=NF; i++) if ($i=="dev") {print $(i+1); exit}}'
     )"
 
     if [ -n "$GATEWAY" ]; then
@@ -5360,7 +5308,11 @@ check_network() {
         check_mihomo_config_port mixed-port tcp "Mixed TCP"
         check_mihomo_config_port port tcp "HTTP 代理 TCP"
         check_mihomo_config_port socks-port tcp "SOCKS 代理 TCP"
-        check_mihomo_config_port redir-port tcp "透明代理 TCP"
+        # 本方案的核心端口：TCP + UDP 都要监听。
+        check_mihomo_config_port tproxy-port tcp "TProxy TCP"
+        check_mihomo_config_port tproxy-port udp "TProxy UDP"
+        # redir-port 不是本方案使用的端口，仅在用户自行配置时检查。
+        check_mihomo_config_port redir-port tcp "Redir 透明代理 TCP（可选）"
         check_mihomo_config_port external-controller tcp "控制端口 TCP"
     else
         network_warn "未找到 Mihomo 配置，无法读取实际端口。"
@@ -5497,10 +5449,240 @@ check_network() {
 
 
 ###############################################################################
+# 设置 IP 为 DHCP
+###############################################################################
+
+configure_dhcp() {
+
+    local IFACE="$1"
+    local IP_MANAGER=""
+    local CONFIRM=""
+
+    IP_MANAGER="$(detect_ip_manager "$IFACE" || true)"
+
+    if [ -z "$IP_MANAGER" ]; then
+        network_error "无法识别 $IFACE 的 IP 管理方式。"
+        network_warn "请确认 NetworkManager、systemd-networkd 或 ifupdown 正在管理该网卡。"
+        return 1
+    fi
+
+    network_info "检测到 $IFACE 的 IP 管理方式：$IP_MANAGER"
+
+    echo
+    echo "============================================================"
+    echo "                     设置 IP 为 DHCP"
+    echo "============================================================"
+    echo
+    echo "网口：        $IFACE"
+    echo "IP 管理方式：  $IP_MANAGER"
+    echo
+    echo "此操作将："
+    echo "  1. 将 $IFACE 切换为 DHCP 自动获取 IP"
+    echo "  2. 释放当前 IPv4 地址"
+    echo "  3. 重新获取地址"
+    echo
+    [ -n "${SSH_CONNECTION:-}" ] && echo "  注意：当前通过 SSH 连接，切换 DHCP 可能导致连接中断。"
+    echo
+
+    read -r -p "确认修改？[Y/n] " CONFIRM || { network_warn "输入已结束，操作取消。"; return 1; }
+    CONFIRM="${CONFIRM:-Y}"
+
+    case "$CONFIRM" in
+        Y|y|YES|yes) ;;
+        *) echo "已取消。"; return 0 ;;
+    esac
+
+    echo
+    case "$IP_MANAGER" in
+
+        NetworkManager)
+            configure_dhcp_nm "$IFACE" || true
+            ;;
+
+        systemd-networkd)
+            configure_dhcp_networkd "$IFACE" || true
+            ;;
+
+        ifupdown)
+            configure_dhcp_ifupdown "$IFACE" || true
+            ;;
+
+        *)
+            network_error "不支持的 IP 管理方式：$IP_MANAGER"
+            return 1
+            ;;
+    esac
+
+    # 无论上面是否成功，都执行一次实际状态检查，便于定位失败点。
+    check_network "$IFACE"
+}
+
+
+configure_dhcp_nm() {
+
+    local IFACE="$1"
+    local CONNECTION=""
+
+    CONNECTION="$(get_nm_connection "$IFACE")" || {
+        network_error "无法找到 $IFACE 的 NetworkManager 活动连接。"
+        return 1
+    }
+
+    network_info "使用 NetworkManager 连接：$CONNECTION"
+
+    nmcli connection modify "$CONNECTION" \
+        ipv4.method auto \
+        ipv4.addresses "" \
+        ipv4.gateway "" >/dev/null 2>&1 || {
+        network_error "NetworkManager 配置修改失败。"
+        return 1
+    }
+
+    nmcli connection up "$CONNECTION" ifname "$IFACE" >/dev/null 2>&1 || {
+        network_error "NetworkManager 重新激活连接失败。"
+        return 1
+    }
+
+    sleep 3
+
+    network_pass "$IFACE 已设置为 DHCP。"
+}
+
+
+configure_dhcp_networkd() {
+
+    local IFACE="$1"
+
+    for NETWORK_FILE in "$NETWORK_DIR"/*.network; do
+        [ -f "$NETWORK_FILE" ] || continue
+
+        if awk -v IFACE="$IFACE" '
+            /^[[:space:]]*\[Match\]/ { in_match=1; next }
+            /^\[/ { in_match=0 }
+            in_match && $0 ~ "^[[:space:]]*Name=" IFACE "([[:space:]]|$)" { found=1 }
+            END { exit(found ? 0 : 1) }
+        ' "$NETWORK_FILE"; then
+
+            local BACKUP_FILE
+            BACKUP_FILE="${NETWORK_FILE}.bak.$(date +%Y%m%d-%H%M%S)"
+            cp -a "$NETWORK_FILE" "$BACKUP_FILE"
+            network_pass "旧配置已备份：$BACKUP_FILE"
+        fi
+    done
+
+    local TEMP_FILE
+    TEMP_FILE="$(mktemp "$NETWORK_DIR/.10-${IFACE}.network.XXXXXX")"
+
+    cat > "$TEMP_FILE" <<EOF
+[Match]
+Name=$IFACE
+
+[Network]
+DHCP=yes
+IPv6AcceptRA=no
+LinkLocalAddressing=no
+IPv6SendRA=no
+EOF
+
+    chmod 644 "$TEMP_FILE"
+    mv -f "$TEMP_FILE" "$NETWORK_DIR/10-${IFACE}.network"
+
+    network_pass "已写入：$NETWORK_DIR/10-${IFACE}.network"
+
+    release_dhcp_lease "$IFACE"
+
+    # apply_networkd 失败时返回 1；这里必须显式处理，
+    # 否则在 set -e 下会直接终止脚本而不是回到菜单。
+    if apply_networkd "$IFACE"; then
+        network_pass "$IFACE 已设置为 DHCP。"
+    else
+        network_error "$IFACE 的 DHCP 配置已写入，但 systemd-networkd 未能生效。"
+        return 1
+    fi
+}
+
+
+configure_dhcp_ifupdown() {
+
+    local IFACE="$1"
+    local FILE=""
+
+    FILE="$(ifupdown_config_file "$IFACE" || true)"
+    [ -n "$FILE" ] || {
+        network_error "找不到 $IFACE 的 ifupdown 配置文件。"
+        return 1
+    }
+
+    local BACKUP
+    BACKUP="${FILE}.bak.$(date +%Y%m%d-%H%M%S)"
+    cp -a "$FILE" "$BACKUP"
+    network_pass "旧 ifupdown 配置已备份：$BACKUP"
+
+    local TEMP_FILE
+    TEMP_FILE="$(mktemp "${FILE}.XXXXXX")"
+
+    awk -v IFACE="$IFACE" '
+        BEGIN { skip=0; replaced=0 }
+
+        /^[[:space:]]*iface[[:space:]]+/ {
+            if ($2 == IFACE && $3 == "inet") {
+                if (!replaced) {
+                    print "auto " IFACE
+                    print "iface " IFACE " inet dhcp"
+                    replaced=1
+                }
+                skip=1
+                next
+            }
+            skip=0
+        }
+
+        skip && /^[[:space:]]/ { next }
+        skip { skip=0 }
+        { print }
+
+        END {
+            if (!replaced) {
+                print ""
+                print "auto " IFACE
+                print "iface " IFACE " inet dhcp"
+            }
+        }
+    ' "$FILE" > "$TEMP_FILE"
+
+    chmod 644 "$TEMP_FILE"
+    mv -f "$TEMP_FILE" "$FILE"
+    network_pass "已写入 ifupdown 配置：$FILE"
+
+    release_dhcp_lease "$IFACE"
+
+    if ! ifdown --force "$IFACE" >/dev/null 2>&1; then
+        network_warn "$IFACE 当前未处于 ifupdown active 状态，继续执行 ifup。"
+    fi
+
+    ip -4 addr flush dev "$IFACE" scope global >/dev/null 2>&1 || true
+
+    if ! ifup "$IFACE"; then
+        network_error "ifupdown 启用 $IFACE 失败，正在恢复旧配置。"
+        ip -4 addr flush dev "$IFACE" scope global >/dev/null 2>&1 || true
+        cp -a "$BACKUP" "$FILE"
+        ifup "$IFACE" >/dev/null 2>&1 || true
+        return 1
+    fi
+
+    sleep 2
+
+    network_pass "$IFACE 已设置为 DHCP。"
+}
+
+
+###############################################################################
 # 网络设置菜单
 ###############################################################################
 
 network_menu() {
+
+    local CHOICE=""
 
     clear 2>/dev/null || true
 
@@ -5508,7 +5690,7 @@ network_menu() {
     if [ -z "$ACTIVE_IF" ]; then
         network_error "无法自动识别网口。"
         ip -br link 2>/dev/null || true
-        read -r -p "按回车键返回主菜单..." _
+        read -r -p "按回车键返回主菜单..." _ || true
         return 0
     fi
 
@@ -5516,19 +5698,22 @@ network_menu() {
 
     while true; do
         show_network_menu
-        read -r -p "请选择 [0-4]： " CHOICE
+        if ! read -r -p "请选择 [0-4]： " CHOICE; then
+            echo "输入已结束，退出网络设置。"
+            return 0
+        fi
 
         case "$CHOICE" in
             1)
-                configure_ip "$ACTIVE_IF"
+                # 失败只返回菜单：脚本以 set -e + ERR trap 运行，
+                # 裸调用会让一次输入错误直接终止整个脚本。
+                configure_ip "$ACTIVE_IF" || true
                 ;;
             2)
-                configure_dns
+                configure_dns || true
                 ;;
             3)
-                configure_ip "$ACTIVE_IF"
-                echo
-                configure_dns
+                configure_dhcp "$ACTIVE_IF" || true
                 ;;
             4)
                 check_network "$ACTIVE_IF"
@@ -5543,7 +5728,7 @@ network_menu() {
         esac
 
         echo
-        read -r -p "按 Enter 返回网络菜单……" _
+        read -r -p "按 Enter 返回网络菜单……" _ || true
         clear 2>/dev/null || true
     done
 }
@@ -5563,13 +5748,17 @@ show_network_menu() {
     echo
     echo "  1. 修改 IP"
     echo "  2. 修改 DNS"
-    echo "  3. 修改 IP + DNS"
+    echo "  3. 设置 IP 为 DHCP"
     echo "  4. 查看当前网络状态"
     echo "  0. 退出"
     echo
 }
 
 show_menu() {
+
+    local choice=""
+    local confirm=""
+    local purge_confirm=""
 
     while true; do
         clear 2>/dev/null || true
@@ -5578,45 +5767,64 @@ show_menu() {
         echo "============================================================"
         echo " Mihomo Pure TProxy 管理菜单"
         echo "============================================================"
-        echo "  1. 安装 / 更新"
+        echo "  1. 安装"
         echo "  2. 卸载"
         echo "  3. 检测运行状态"
         echo "  4. 网络设置（IP / DNS）"
+        echo "  5. 更新 Mihomo 内核"
         echo "  0. 退出"
         echo
-        read -r -p "请输入选项 [0-4]：" choice
+        if ! read -r -p "请输入选项 [0-5]：" choice; then
+            echo
+            echo "stdin 已结束（非交互运行），退出菜单。"
+            return 0
+        fi
         echo
 
         case "$choice" in
             1)
                 check_root
                 install_main
-                read -r -p "按回车键返回菜单..." _
+                read -r -p "按回车键返回菜单..." _ || true
                 ;;
 
             2)
                 check_root
-                read -r -p "确定要卸载 Mihomo Pure TProxy 吗？[y/N]：" confirm
+                read -r -p "确定要卸载 Mihomo Pure TProxy 吗？[y/N]：" confirm || return 0
                 case "$confirm" in
                     y|Y|yes|YES)
-                        uninstall
+                        read -r -p "是否同时删除 Mihomo 二进制、配置目录、专用用户和备份？[y/N]：" purge_confirm || return 0
+                        case "$purge_confirm" in
+                            y|Y|yes|YES)
+                                uninstall purge
+                                ;;
+                            *)
+                                uninstall
+                                ;;
+                        esac
                         ;;
                     *)
                         echo "已取消卸载。"
                         ;;
                 esac
-                read -r -p "按回车键返回菜单..." _
+                read -r -p "按回车键返回菜单..." _ || true
                 ;;
 
             3)
                 check_root
                 full_check || true
-                read -r -p "按回车键返回菜单..." _
+                read -r -p "按回车键返回菜单..." _ || true
                 ;;
 
             4)
                 check_root
                 network_menu
+                ;;
+
+            5)
+                check_root
+                update_mihomo || true
+                read -r -p "按回车键返回菜单..." _ || true
                 ;;
 
             0|q|Q)
@@ -5625,8 +5833,8 @@ show_menu() {
                 ;;
 
             *)
-                echo "无效选项，请输入 0、1、2、3 或 4。"
-                read -r -p "按回车键继续..." _
+                echo "无效选项，请输入 0-5。"
+                read -r -p "按回车键继续..." _ || true
                 ;;
         esac
     done
@@ -5638,6 +5846,9 @@ show_menu() {
 ###############################################################################
 
 uninstall() {
+
+    # 传入 purge 时，在卸载之后一并删除二进制、配置、专用用户和备份。
+    local PURGE="${1:-}"
 
     log "卸载 Mihomo Pure TProxy"
 
@@ -5704,6 +5915,101 @@ uninstall() {
 
     ok "TProxy 已卸载"
 
+    if [ "$PURGE" = "purge" ]; then
+        purge_leftovers
+    else
+        echo
+        echo "提示：Mihomo 二进制、配置目录、专用用户和备份仍然保留。"
+        echo "如需一并删除，请运行：$0 purge"
+    fi
+
+}
+
+
+###############################################################################
+# 彻底清理
+#
+# 删除 uninstall 有意保留的内容：
+#
+#   /usr/local/bin/mihomo
+#   /etc/mihomo（含 config.yaml / ui / 缓存）
+#   /root/mihomo-backups
+#   mihomo 用户与用户组
+#
+###############################################################################
+
+purge_leftovers() {
+
+    log "清理 Mihomo 残留"
+
+    #
+    # 删除前校验目标，避免变量为空或异常时误删系统目录。
+    #
+
+    case "$MIHOMO_DIR" in
+        ""|"/"|"/etc")
+            die "MIHOMO_DIR 异常，拒绝删除：$MIHOMO_DIR"
+            ;;
+    esac
+
+    case "$BACKUP_DIR" in
+        ""|"/"|"/root")
+            die "BACKUP_DIR 异常，拒绝删除：$BACKUP_DIR"
+            ;;
+    esac
+
+    case "$MIHOMO_BIN" in
+        ""|"/"|"/usr/local/bin")
+            die "MIHOMO_BIN 异常，拒绝删除：$MIHOMO_BIN"
+            ;;
+    esac
+
+    systemctl stop mihomo 2>/dev/null || true
+    systemctl reset-failed mihomo 2>/dev/null || true
+
+    rm -f "${MIHOMO_BIN}.new"
+
+    if [ -e "$MIHOMO_BIN" ]; then
+        rm -f "$MIHOMO_BIN"
+        ok "已删除二进制：$MIHOMO_BIN"
+    fi
+
+    if [ -d "$MIHOMO_DIR" ]; then
+        rm -rf "$MIHOMO_DIR"
+        ok "已删除配置目录：$MIHOMO_DIR"
+    fi
+
+    if [ -d "$BACKUP_DIR" ]; then
+        rm -rf "$BACKUP_DIR"
+        ok "已删除备份目录：$BACKUP_DIR"
+    fi
+
+    #
+    # 用户可能仍被进程占用而删除失败，这里只提示，不中断。
+    #
+
+    if id "$MIHOMO_USER" >/dev/null 2>&1; then
+
+        if userdel "$MIHOMO_USER" 2>/dev/null; then
+            ok "已删除用户：$MIHOMO_USER"
+        else
+            warn "无法删除用户 $MIHOMO_USER，请确认无残留进程后手动执行：userdel $MIHOMO_USER"
+        fi
+
+    fi
+
+    if getent group "$MIHOMO_GROUP" >/dev/null 2>&1; then
+
+        if groupdel "$MIHOMO_GROUP" 2>/dev/null; then
+            ok "已删除用户组：$MIHOMO_GROUP"
+        else
+            warn "无法删除用户组 $MIHOMO_GROUP"
+        fi
+
+    fi
+
+    ok "残留清理完成"
+
 }
 
 
@@ -5745,7 +6051,25 @@ install_main() {
 
     create_mihomo_user
 
-    install_mihomo
+    #
+    # 第 1 项只负责安装：已经装过就不再动内核二进制，
+    # 需要更新请使用菜单第 5 项，或执行 $0 update。
+    #
+
+    if [ -x "$MIHOMO_BIN" ]; then
+
+        local current_version=""
+
+        current_version="$(get_current_version)"
+
+        ok "已检测到 Mihomo ${current_version:-未知}，跳过内核安装"
+        ok "需要更新内核请使用菜单第 5 项，或执行：$0 update"
+
+    else
+
+        install_mihomo
+
+    fi
     
     install_config
     
@@ -5783,7 +6107,9 @@ install_main() {
 
     configure_local_dns
 
-    full_check
+    # 健康检查发现 FAIL 时返回 1。此时安装步骤已全部完成，
+    # 不能让它触发 ERR trap 中断后续的完成提示。
+    full_check || true
 
 
     log "安装完成"
@@ -5822,6 +6148,152 @@ install_main() {
 
 
 ###############################################################################
+# 更新 Mihomo 内核
+#
+# 只更新 /usr/local/bin/mihomo 二进制：
+#
+#   1. 对比当前版本与 GitHub 最新版本
+#   2. 有新版本时下载 → SHA256 校验 → 替换（旧二进制备份到 $BACKUP_DIR）
+#   3. 替换后先做配置检查，再重启 mihomo
+#
+# 不修改 config.yaml、nftables、策略路由和 DNS。
+###############################################################################
+
+update_mihomo() {
+
+    log "更新 Mihomo 内核"
+
+    check_root
+    detect_arch
+
+    local cmd=""
+    local old_version=""
+    local new_version=""
+    local latest_backup=""
+
+    #
+    # 更新只依赖下载和安装相关命令，不要求 nft / ip 等运行环境。
+    #
+
+    for cmd in curl wget jq gzip sha256sum mktemp install; do
+
+        if ! command -v "$cmd" >/dev/null 2>&1; then
+            warn "缺少必要命令：$cmd"
+            warn "可以先执行「安装 / 更新」安装依赖，再回来更新内核。"
+            return 1
+        fi
+
+    done
+
+    #
+    # install_mihomo 会把旧二进制备份到 $BACKUP_DIR，
+    # 单独更新（不经过 install_main）时必须确保目录存在。
+    #
+
+    mkdir -p "$BACKUP_DIR" "$MIHOMO_DIR"
+
+    old_version="$(get_current_version)"
+
+    MIHOMO_CHANGED=0
+
+    #
+    # install_mihomo 内部会自行获取最新版本并判断是否需要下载，
+    # 它通过 MIHOMO_CHANGED 告知是否真的替换了二进制。
+    #
+
+    install_mihomo
+
+    new_version="$(get_current_version)"
+
+    if [ "$MIHOMO_CHANGED" -eq 0 ]; then
+
+        ok "Mihomo 已是最新版本：${new_version:-未知}"
+
+        return 0
+
+    fi
+
+    echo
+    echo "版本变化：${old_version:-未安装} → ${new_version:-未知}"
+
+    #
+    # 二进制已替换：先验证配置，再重启服务。
+    # 配置检查失败时回滚到刚备份的旧二进制，避免把可用环境更新坏。
+    #
+
+    if [ -f "$MIHOMO_CONFIG" ]; then
+
+        if ! check_config; then
+
+            latest_backup="$(ls -1t "${BACKUP_DIR}"/mihomo.* 2>/dev/null | head -n 1 || true)"
+
+            warn "新版本配置检查失败"
+
+            if [ -n "$latest_backup" ] && [ -x "$latest_backup" ]; then
+                install -m 755 "$latest_backup" "$MIHOMO_BIN"
+                warn "已回滚到旧版本：$latest_backup"
+            fi
+
+            return 1
+
+        fi
+
+    else
+
+        warn "没有找到 $MIHOMO_CONFIG，跳过配置检查。"
+        warn "如需完整部署，请使用「安装 / 更新」。"
+
+    fi
+
+    if [ ! -f "$MIHOMO_SERVICE" ]; then
+
+        warn "没有找到 $MIHOMO_SERVICE，只更新了二进制，未重启服务。"
+        ok "Mihomo 更新完成：${old_version:-未安装} → ${new_version:-未知}"
+
+        return 0
+
+    fi
+
+    systemctl reset-failed mihomo 2>/dev/null || true
+
+    #
+    # restart 本身失败也会返回非 0，必须显式处理，
+    # 否则会触发 ERR trap 直接退出，跳过下面的诊断和备份提示。
+    #
+
+    if ! systemctl restart mihomo; then
+
+        journalctl -u mihomo -n 50 --no-pager 2>/dev/null || true
+
+        warn "mihomo 重启失败，请检查上面的日志。"
+        warn "旧二进制备份：$BACKUP_DIR"
+
+        return 1
+
+    fi
+
+    sleep 3
+
+    if systemctl is-active --quiet mihomo; then
+
+        ok "Mihomo 已重启，运行正常"
+        ok "版本：${old_version:-未安装} → ${new_version:-未知}"
+
+        return 0
+
+    fi
+
+    journalctl -u mihomo -n 50 --no-pager 2>/dev/null || true
+
+    warn "Mihomo 重启后未处于 active 状态，请检查上面的日志。"
+    warn "旧二进制备份：$BACKUP_DIR"
+
+    return 1
+
+}
+
+
+###############################################################################
 # 参数
 ###############################################################################
 
@@ -5844,7 +6316,9 @@ case "$ACTION" in
     check)
 
         check_root
-        full_check
+        # 健康检查已打印 FAILED 汇总，这里用显式退出码代替 ERR trap，
+        # 避免再输出一次误导性的“脚本执行失败”。
+        full_check || exit 1
 
         ;;
 
@@ -5865,6 +6339,22 @@ case "$ACTION" in
         ;;
 
 
+    purge)
+
+        check_root
+        uninstall purge
+
+        ;;
+
+
+    update)
+
+        check_root
+        update_mihomo || exit 1
+
+        ;;
+
+
     help|-h|--help)
 
         echo
@@ -5873,11 +6363,20 @@ case "$ACTION" in
         echo "  $0"
         echo "      进入管理菜单"
         echo
+        echo "  $0 install"
+        echo "      安装（内核已存在则跳过，更新请用 update）"
+        echo
         echo "  $0 check"
         echo "      检查运行状态"
         echo
         echo "  $0 uninstall"
-        echo "      卸载"
+        echo "      卸载（保留二进制、配置、专用用户和备份）"
+        echo
+        echo "  $0 purge"
+        echo "      卸载并删除二进制、配置目录、专用用户和备份"
+        echo
+        echo "  $0 update"
+        echo "      仅更新 Mihomo 内核（不改配置 / nft / 策略路由）"
         echo
         echo "  $0 network"
         echo "      网络设置（IP / DNS）"

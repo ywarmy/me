@@ -745,7 +745,6 @@ create_embedded_config() {
 
     local TARGET="$1"
     local SUBSCRIPTION_URL="$2"
-    local API_SECRET="${3:-}"
 
     cat > "$TARGET" <<'EOF'
 proxy-providers:
@@ -788,7 +787,7 @@ profile:
 
 # 控制面板
 external-controller: 0.0.0.0:9090
-secret: "__MIHOMO_API_SECRET__"
+secret: ""
 external-ui: "/etc/mihomo/ui"
 external-ui-name: zashboard
 external-ui-url: "https://github.com/Zephyruso/zashboard/archive/refs/heads/gh-pages.zip"
@@ -893,35 +892,6 @@ rule-providers:
 
 EOF
 
-    #
-    # 控制面板鉴权：
-    #
-    # secret 在 heredoc 里以占位符写入，这里替换成真正生成的值。
-    # 用临时文件 + cat 回写，避免依赖 sed -i 的跨平台差异；
-    # secret 只含 [0-9a-f]，不会破坏 sed 的 | 分隔符。
-    #
-    if [ -n "$API_SECRET" ]; then
-
-        local SECRET_TMP=""
-
-        SECRET_TMP="$(mktemp /tmp/mihomo-secret.XXXXXX)"
-        sed "s|__MIHOMO_API_SECRET__|${API_SECRET}|g" "$TARGET" > "$SECRET_TMP"
-        cat "$SECRET_TMP" > "$TARGET"
-        rm -f "$SECRET_TMP"
-
-    else
-
-        #
-        # 没给 secret 时必须留空，否则面板会带着字面占位符运行。
-        #
-        local SECRET_TMP_EMPTY=""
-
-        SECRET_TMP_EMPTY="$(mktemp /tmp/mihomo-secret.XXXXXX)"
-        sed 's|__MIHOMO_API_SECRET__||g' "$TARGET" > "$SECRET_TMP_EMPTY"
-        cat "$SECRET_TMP_EMPTY" > "$TARGET"
-        rm -f "$SECRET_TMP_EMPTY"
-
-    fi
 
 }
 
@@ -933,7 +903,6 @@ install_config() {
     local CONFIG_TO_INSTALL="$CONFIG_SOURCE"
     local GENERATED_CONFIG=""
     local SUBSCRIPTION_URL=""
-    local API_SECRET=""
 
     if [ ! -f "$CONFIG_SOURCE" ]; then
         echo
@@ -954,15 +923,7 @@ install_config() {
 
         GENERATED_CONFIG="$(mktemp /tmp/mihomo-config.XXXXXX)"
 
-        #
-        # 控制面板 secret：随机 32 位十六进制。
-        #
-        # 用 od 读固定 16 字节而不是 `tr < /dev/urandom | head -c`：
-        # 后者会让 tr 收到 SIGPIPE，在 pipefail 下赋值直接失败。
-        #
-        API_SECRET="$(od -An -tx1 -N16 /dev/urandom | tr -d ' \n')"
-
-        create_embedded_config "$GENERATED_CONFIG" "$SUBSCRIPTION_URL" "$API_SECRET"
+        create_embedded_config "$GENERATED_CONFIG" "$SUBSCRIPTION_URL"
         CONFIG_TO_INSTALL="$GENERATED_CONFIG"
     fi
 
@@ -989,76 +950,12 @@ install_config() {
 
     [ -n "$GENERATED_CONFIG" ] && rm -f "$GENERATED_CONFIG"
 
-    #
-    # 外置 config.yaml 的 secret 为空时，在部署阶段补一个 secret。
-    #
-    # 仓库里的 config.yaml 是公开的，不能预埋固定 secret（等于公开）；
-    # 所以按机器生成，只写进 /etc/mihomo/config.yaml。
-    # 已部署过的机器沿用原 secret，避免每次重装都换掉用户手里的值。
-    #
-    local DEPLOY_SECRET=""
-    local EXISTING_SECRET=""
-
-    DEPLOY_SECRET="$(
-        awk '
-            /^[[:space:]]*secret:/ {
-                sub(/^[^:]*:[[:space:]]*/, "")
-                print
-                exit
-            }
-        ' "$MIHOMO_CONFIG" |
-        tr -d "\"' \t"
-    )"
-
-    if [ -z "$DEPLOY_SECRET" ] &&
-       grep -Eq '^[[:space:]]*external-controller:[[:space:]]*"?0\.0\.0\.0' "$MIHOMO_CONFIG"; then
-
-        if [ -n "${backup:-}" ] && [ -f "${backup:-}" ]; then
-
-            EXISTING_SECRET="$(
-                awk '
-                    /^[[:space:]]*secret:/ {
-                        sub(/^[^:]*:[[:space:]]*/, "")
-                        print
-                        exit
-                    }
-                ' "$backup" |
-                tr -d "\"' \t"
-            )"
-
-        fi
-
-        local SECRET_INJECT_TMP=""
-
-        if [ -n "$EXISTING_SECRET" ]; then
-            API_SECRET="$EXISTING_SECRET"
-            ok "控制面板 secret 为空，沿用已有 secret"
-        else
-            API_SECRET="$(od -An -tx1 -N16 /dev/urandom | tr -d ' \n')"
-            ok "控制面板 secret 为空，已生成随机 secret"
-        fi
-
-        SECRET_INJECT_TMP="$(mktemp /tmp/mihomo-secret.XXXXXX)"
-
-        sed "s|^\([[:space:]]*secret:\).*|\1 \"${API_SECRET}\"|" "$MIHOMO_CONFIG" > "$SECRET_INJECT_TMP"
-        cat "$SECRET_INJECT_TMP" > "$MIHOMO_CONFIG"
-        rm -f "$SECRET_INJECT_TMP"
-
-    fi
-
     chown "$MIHOMO_USER:$MIHOMO_GROUP" "$MIHOMO_CONFIG" 2>/dev/null || true
 
     chmod 600 "$MIHOMO_CONFIG"
     CONFIG_CHANGED=1
 
     ok "config.yaml 安装完成"
-
-    if [ -n "$API_SECRET" ]; then
-        echo
-        ok "控制面板 secret：$API_SECRET"
-        echo "    面板：http://<网关IP>:9090/ui     Secret 填上面的值"
-        echo "    请自行保存；忘记可用：grep '^secret:' $MIHOMO_CONFIG"
-    fi
 
 }
 
@@ -1105,8 +1002,8 @@ check_required_config() {
     #
     # 控制面板鉴权：
     #
-    # external-controller 监听 0.0.0.0 且 secret 为空时，
-    # 局域网内任何设备都能完全接管代理、读走订阅地址。
+    # 这里只做提示，不改配置。secret 为空属于默认取舍
+    # （面板只在 LAN 内可达，需要时再自行添加）。
     #
     local PANEL_SECRET=""
 
@@ -1124,8 +1021,7 @@ check_required_config() {
     if [ -z "$PANEL_SECRET" ] &&
        grep -Eq '^[[:space:]]*external-controller:[[:space:]]*"?0\.0\.0\.0' "$MIHOMO_CONFIG"; then
 
-        warn "控制面板对外监听且 secret 为空：局域网内可被任何人接管"
-        warn "建议设置 secret，或改成 external-controller: 127.0.0.1:9090"
+        echo "注意：控制面板未设 secret，:9090 在局域网内可直接访问（按需自行添加）"
 
     fi
 
